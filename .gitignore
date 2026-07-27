@@ -1,0 +1,19 @@
+# 依赖
+node_modules/
+
+# 构建产物
+.next/
+out/
+dist/
+
+# 环境变量（含密钥，绝不提交）
+.env
+.env.local
+.env.*.local
+
+# Prisma 生成
+prisma/migrations/dev.db*
+*.tsbuildinfo
+
+# 系统
+.DS_Store

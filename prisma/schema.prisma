@@ -1,0 +1,128 @@
+// Prisma schema — AI 升学规划 Agent（高考志愿）
+// Issue: MAO-2 多档案数据模型 + schema + RLS + 鉴权
+// 决策依据: D-002-B（规划人员=一账号管多个考生档案）/ D-003（Next.js + Supabase + Prisma）
+//
+// 说明:
+// - 本文件是「应用数据模型」的单一事实来源（表结构 + TS 类型）。
+// - Supabase Auth 自带 auth.users；本 schema 的 Account 与其 1:1（account.id = auth.uid()），
+//   通过 supabase/migrations 里的 trigger 在注册时自动建 Account 行。
+// - RLS 策略不在 Prisma 里管，见 supabase/rls.sql（Prisma 迁移后单独应用，表结构变更后需重应用）。
+// - account_id 在 Plan / PlanVersion 上冗余存放，让 RLS 只做 account_id = auth.uid() 单字段判断（免 join，性能与安全兼顾）。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // 直连（绕过 PgBouncer/Supabase pooler）用于迁移；运行期可用 pooled URL
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+/// 用户角色：学生 / 家长 / 规划人员（D-002-B，三类都做）
+enum UserRole {
+  student
+  parent
+  planner
+}
+
+/// 新高考 3+1+2 首选科目（物理类 / 历史类）
+enum SubjectTrack {
+  physical
+  historical
+}
+
+/// 方案策略：院校优先 / 专业优先 / 均衡
+enum PlanStrategy {
+  school_first
+  major_first
+  balanced
+}
+
+/// 方案状态
+enum PlanStatus {
+  draft
+  active
+  confirmed
+  archived
+}
+
+/// 账号（= 应用用户，1:1 对应 Supabase auth.users）
+model Account {
+  id           String    @id @db Uuid // = auth.uid()
+  email        String    @unique
+  role         UserRole  @default(student)
+  displayName  String?   @map("display_name")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  profiles Profile[]
+  plans    Plan[]
+  versions PlanVersion[]
+
+  @@map("accounts")
+}
+
+/// 考生档案（规划人员可有多个；学生/家长通常 1 个）
+model Profile {
+  id              String       @id @default(uuid()) @db Uuid
+  accountId       String       @map("account_id") @db Uuid
+  account         Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name            String // 档案标签 / 考生姓名
+  province        String // 省，如 "江苏"
+  gaokaoYear      Int          @map("gaokao_year") // 招生年度，如 2026
+  subjectTrack    SubjectTrack @map("subject_track") // 物理类 / 历史类
+  selectedSubjects String[]    @map("selected_subjects") // 选科，如 ["化学","生物"]
+  score           Int? // 高考分数
+  rank            BigInt? // 位次（一分一段表）
+  preferences     Json? // 偏好：地区/专业方向/城市/办学类型等（结构化 JSON）
+  budget          Json? // 预算（学费上限 / {min,max}）
+  isActive        Boolean      @default(false) @map("is_active") // 规划人员当前选中的档案（切换用）
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  plans Plan[]
+
+  @@index([accountId])
+  @@map("profiles")
+}
+
+/// 方案（归属于某个考生档案）
+model Plan {
+  id               String       @id @default(uuid()) @db Uuid
+  profileId        String       @map("profile_id") @db Uuid
+  profile          Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  accountId        String       @map("account_id") @db Uuid // 冗余：RLS 单字段判断
+  account          Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name             String // 方案名，如 "院校优先 v1"
+  strategy         PlanStrategy @default(balanced)
+  conditionsSnapshot Json?       @map("conditions_snapshot") // 生成此方案时的条件快照
+  status           PlanStatus   @default(draft)
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  versions PlanVersion[]
+
+  @@index([profileId])
+  @@index([accountId])
+  @@map("plans")
+}
+
+/// 方案版本（不可变快照；候选卡列表以 jsonb 存于此，对齐「数据」candidate card schema）
+model PlanVersion {
+  id          String   @id @default(uuid()) @db Uuid
+  planId      String   @map("plan_id") @db Uuid
+  plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  accountId   String   @map("account_id") @db Uuid // 冗余：RLS 单字段判断
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  versionNo   Int      @map("version_no")
+  snapshot    Json // 完整快照：候选卡[] + 依据 + 规则执行记录
+  diff        Json? // 与上一版的差异（增删改候选 / 条件变化）
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([planId, versionNo])
+  @@index([planId])
+  @@index([accountId])
+  @@map("plan_versions")
+}
