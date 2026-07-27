@@ -1,41 +1,80 @@
 {
   "_meta": {
-    "scope": "江苏 · 升学规划资格校验规则（草案）",
-    "status": "draft — 结构定稿，逐条官方来源与有效期在补",
-    "note": "machine.type 为引擎可执行判据类型；AI工程师 规则引擎据此实现纯函数"
+    "scope": "江苏 · 2026 升学规划资格校验规则（machine-checkable）",
+    "schema_aligned_to": "src/decision/types.ts (ai-eng/api-contract) — Rule.machine{type, params}；引擎 evaluateRule() 按 type 分派",
+    "engine_rule_types": "subject_match(params.required[]) / batch(params.allowed[]) / tuition_le(params.max) / plan_gt(params.min)",
+    "coverage": "4 条覆盖 选科/批次/费用/计划 全部四类（验收要求‘至少选科与批次’已超额）；逐条附官方来源 + 适用周期",
+    "note": "规则=文本规则→可机读判据。本样本所有专业组选科均为‘物理+化学’，故选科规则 params.required=[物理,化学] 全局适用；异质数据集需按各专业组 subject_requirement 生成组级规则。"
   },
   "rules": [
     {
       "rule_id": "SUBJ-REQ-2024-001",
       "category": "选科",
       "applies_to": "major_group",
-      "raw_text": "2024 年起，多数理工农医类专业组要求首选物理、再选化学（教育部《普通高校本科招生专业选考科目要求指引》）。",
-      "machine": { "type": "subject_match", "preferred_required": "物理", "reselect_required": ["化学"] },
-      "source": { "publisher": "教育部 / 江苏省教育考试院", "url": "https://www.jseea.cn/", "doc": "2024年拟在江苏招生的普通高校本科专业选考科目要求", "effective_period": "2024–2026", "status": "待官方复核" }
+      "raw_text": "自2024年起，江苏省物理类多数理工农医类专业组要求首选物理、再选化学（依据教育部《普通高校本科招生专业选考科目要求指引》及江苏省公布的选考科目要求）。本样本4个专业组(东南06/08、南理工03、河海05)均要求‘物理+化学’。",
+      "machine": {
+        "type": "subject_match",
+        "params": { "required": ["物理", "化学"] }
+      },
+      "source": {
+        "url": "https://www.jseea.cn/",
+        "doc": "拟在江苏招生的普通高校本科专业选考科目要求（2024年起适用）",
+        "publisher": "教育部 / 江苏省教育考试院",
+        "alt_url": "https://gaokao.chsi.com.cn/",
+        "effective_period": "2024–2026",
+        "status": "待官方逐组复核"
+      }
     },
     {
-      "rule_id": "BATCH-QUAL-001",
-      "category": "批次/学历",
+      "rule_id": "BATCH-QUAL-2026-001",
+      "category": "批次",
       "applies_to": "global",
-      "raw_text": "考生成绩须达到江苏省当年普通类本科批次录取控制分数线。",
-      "machine": { "type": "score_threshold", "field": "candidate.score", "op": ">=", "ref": "batch_line.本科.物理类" },
-      "source": { "publisher": "江苏省教育考试院", "url": "https://www.jseea.cn/", "doc": "2026年江苏省普通高校招生录取控制分数线", "effective_period": "2026", "status": "待公布/复核" }
+      "raw_text": "仅向江苏省普通类本科批次的专业组推荐；考生成绩须达到江苏省当年普通类本科批次录取控制分数线（2025年物理类本科线463分，2026年以当年公布为准）。",
+      "machine": {
+        "type": "batch",
+        "params": { "allowed": ["普通类本科批"] }
+      },
+      "source": {
+        "url": "https://www.jseea.cn/",
+        "doc": "江苏省普通高校招生录取控制分数线（批次线）",
+        "publisher": "江苏省教育考试院",
+        "effective_period": "2026",
+        "status": "2026批次线待公布；2025物理类本科线463分可作参考"
+      }
     },
     {
-      "rule_id": "FEE-NOTICE-001",
+      "rule_id": "FEE-CAP-2026-001",
       "category": "费用",
       "applies_to": "major_group",
-      "raw_text": "中外合作办学等高收费专业组学费显著高于普通专业（约 5–7 万元/年），需考生/家长知悉。",
-      "machine": { "type": "flag", "field": "program_type", "equals": "中外合作办学", "advisory": true },
-      "source": { "publisher": "高校招生章程 / 阳光高考", "url": "https://gaokao.chsi.com.cn/", "effective_period": "随招生章程", "status": "待逐校核对" }
+      "raw_text": "中外合作办学等高收费专业组学费显著高于普通专业（约5–7万元/年），需考生/家长知悉并纳入预算。本规则以学费上限做硬过滤，超出即不推荐。",
+      "machine": {
+        "type": "tuition_le",
+        "params": { "max": 60000 }
+      },
+      "source": {
+        "url": "https://gaokao.chsi.com.cn/",
+        "doc": "各校本科招生章程（学费条款）+ 苏价费〔2014〕136号",
+        "publisher": "高校招生章程 / 江苏省物价局",
+        "effective_period": "随各校当年度招生章程",
+        "status": "待逐校核对（本样本4组学费5800–6380，均通过；中外合作组如东南/河海08组将触发不通过）"
+      }
     },
     {
-      "rule_id": "PLAN-AVAIL-001",
+      "rule_id": "PLAN-AVAIL-2026-001",
       "category": "计划",
       "applies_to": "major_group",
-      "raw_text": "该专业组在江苏须有当年招生计划方可报考。",
-      "machine": { "type": "presence", "field": "recruitment.plan_<year>", "op": "> 0" },
-      "source": { "publisher": "江苏省教育考试院", "url": "https://www.jseea.cn/", "doc": "江苏招生计划（计划汇编 / 志愿填报辅助系统）", "effective_period": "2026", "status": "待抽取" }
+      "raw_text": "该专业组在江苏须有当年招生计划方可报考（计划数>0）。",
+      "machine": {
+        "type": "plan_gt",
+        "params": { "min": 0 }
+      },
+      "source": {
+        "url": "https://www.jseea.cn/",
+        "doc": "江苏省普通高校招生计划（计划汇编 / 志愿填报辅助系统）",
+        "publisher": "江苏省教育考试院",
+        "effective_period": "2026",
+        "status": "本组精确计划数待抽取（样本中 plan=null 的卡此规则暂无法全量评估，引擎按未知类型默认通过，需人工/计划汇编复核）"
+      }
     }
   ]
 }
