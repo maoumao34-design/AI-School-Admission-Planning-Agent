@@ -17,9 +17,24 @@
 
 5 个智能体：项目经理(PM) / AI Agent 工程师(核心) / 全栈开发 / 数据与规则研究员(成败关键) / QA。
 
-## 技术栈
+## 技术栈（已锁定 D-003）
 
-暂不确定，待核心工程角色入位后讨论确定（默认候选：Next.js 全栈）。
+Next.js(App Router) 一体全栈 + TypeScript + Tailwind + Supabase(Postgres+Auth+RLS) + Prisma。
+规则/概率引擎 = TS 纯函数（`src/decision/*`，AI工程师 MAO-12），数据 = JSON（数据角色 MAO-9），LLM 编排同仓 TS（待 MAO-14）。详见 [docs/DATA-MODEL.md](./docs/DATA-MODEL.md) 与 [docs/API-CONTRACT.md](./docs/API-CONTRACT.md)。
+
+## 前端启动
+
+```bash
+npm install
+npm run dev      # http://localhost:3000
+npm run build    # 生产构建
+npm run test     # 引擎 vitest 单测
+npm run qa       # 6 步黑盒回归（打 http://localhost:3000）
+```
+
+> 前端骨架（MAO-13）：`app/page.tsx` + `src/components/*`（ChatPane/Workspace/CandidateCard）；对话区 + 工作区双栏 + 结构化候选卡。
+> 候选卡数据来自真引擎 `POST /api/compare`（`src/decision` 纯函数算概率档/位次差/理由/排序），**非 mock**。
+> 数据库/鉴权（MAO-2）需先建 Supabase 项目并配 `.env`（见 `.env.example`），运行 `npm run db:setup`。
 
 ## 范围
 
