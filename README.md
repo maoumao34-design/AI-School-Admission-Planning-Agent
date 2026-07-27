@@ -6,9 +6,10 @@
 
 完整的任务要求、范围、核心功能、端到端流程、验收标准与最终交付，全部在：
 
-👉 **[TASK-SPEC.md](./TASK-SPEC.md)**
+👉 **[TASK-SPEC.md](./TASK-SPEC.md)** — 做什么
+👉 **[DELIVERY-STANDARD.md](./DELIVERY-STANDARD.md)** — 怎么交、交到什么程度（完整交付/评分流程）
 
-> 所有 agent 接到任务后，请**先读 TASK-SPEC.md**，再开始工作。一切设计以此为准。
+> 所有 agent 接到任务后，请**先读 TASK-SPEC.md，再读 DELIVERY-STANDARD.md**，再开始工作。一切设计以此为准。
 
 ## 团队角色
 
@@ -17,3 +18,7 @@
 ## 技术栈
 
 暂不确定，待核心工程角色入位后讨论确定（默认候选：Next.js 全栈）。
+
+## ⚠️ 范围提醒
+
+按 DELIVERY-STANDARD.md，**两项共同必做工作流（游戏营销、AI 漫剧）也需随网页/源码/报告一并交付**。本项目以方向 05 高考志愿为主；两项共同工作流的范围与分工待确认。
