@@ -2,10 +2,12 @@
 
 > 作者：AI 工程师（决策核心） · 分支 `ai-eng/api-contract`
 > 对齐：TASK-SPEC §3-7、PRD-v1、数据角色候选卡/规则表 schema。
-> 状态：**草案 v1，待 全栈 / 数据 / QA 对齐字段后定稿**。
+> 状态：**v2 — 类型已对齐数据 JSON、路由已挂载、单测+QA 脚本就绪**。待 全栈/QA 联调。
 
 本文件定义决策核心对外暴露的三个端点 + 数据结构，供全栈对接、QA 脚本驱动。
-类型定义见 [`src/decision/types.ts`](../src/decision/types.ts)；纯函数引擎见 [`src/decision/engine.ts`](../src/decision/engine.ts)。
+类型定义见 [`src/decision/types.ts`](../src/decision/types.ts)；纯函数引擎见 [`src/decision/engine.ts`](../src/decision/engine.ts)；
+JSON 适配层（消费数据角色交付的 JSON）见 [`src/decision/adapter.ts`](../src/decision/adapter.ts)；
+端点编排层（纯函数、可单测）见 [`src/decision/handlers.ts`](../src/decision/handlers.ts)。
 
 ---
 
@@ -123,16 +125,36 @@
 
 ---
 
-## 6. 对齐请求
+## 6. 对齐请求（状态：数据已交付，类型已对齐）
 
-- **数据**：候选卡 / 规则表字段名请与 `types.ts` 的 `CandidateCard` / `Rule` 对齐（如 `major_group.group_no`、`subject_requirement`、`history[].min_rank`、`machine.type`）。若字段名不同，回我一句，我改 `types.ts`（字段映射只改一处）。规则 `machine.type` 暂定：`subject_match | batch | tuition_le | plan_gt`，新增类型我加分派。
-- **全栈**：`src/decision/` 是纯 TS，无 Next.js 依赖，直接放进 App Router 工程；API Routes 在 `src/app/api/{eligibility,compare,recompute}/route.ts` 调引擎即可。`profileId` 我预留了，plan 表挂 Profile 下由你管。
-- **QA**：三端点可直接脚本驱动（curl/fetch），串成 6 步回归；异常路径（`outcome.status != 'ok'`）有 `reason + next_step`，可断言。
+- **数据**：✅ 已对齐。`types.ts` 的 `CandidateCard` / `Rule` 现直接消费 `data/sample-jiangsu-2026-phys.json`、`data/rules.example.json`（少量表示差异由 `adapter.ts` 归一：`candidate_context.subjects`→`SubjectSelection`、`recruitment.plan_<year>`→`plan_by_year`）。字段名若再变，只改 `adapter.ts`。
+  - 规则 `machine.type` 实际为：`subject_match | score_threshold | flag | presence`（数据角色交付值），引擎均已分派实现。
+- **全栈**：`src/decision/` 是纯 TS、无 Next.js 依赖；API Routes 已挂为 `app/api/{eligibility,compare,recompute}/route.ts`（Next.js App Router），直接放进你的工程即可。`profileId` 我预留了（recompute 端点），plan 表挂 Profile 下由你管。
+- **QA**：三端点可直接脚本驱动；`npm run qa` 跑 6 步黑盒回归（见下「快速验证」）；异常路径（`outcome.status != 'ok'`）有 `reason + next_step`，可断言。
 
 ---
 
-## 7. 待办（本分支之后）
+## 7. 快速验证（端到端只跑一个服务）
 
-- [ ] 数据 48h 样本字段对齐后，补一份 `__tests__` 用真实样本跑通资格+比较。
-- [ ] API Route 薄封装（等全栈 App Router 工程就位后挂上）。
-- [ ] LLM 编排模块（选定 provider 后）。
+```bash
+npm install
+npm run typecheck   # tsc --noEmit
+npm test            # vitest：引擎单测 + 消费真实 JSON 样本的端到端断言（44 用例）
+npm run dev         # 终端 A：启动唯一服务（Next.js，暴露 /api/*）
+npm run qa          # 终端 B：6 步黑盒回归，打 http://localhost:3000
+```
+
+QA 脚本（`scripts/qa-6step.mjs`）覆盖：03 资格校验 → 04 方案比较（断言 SEU-08=稳妥/NJUST-03=保底/NJUST-02=冲刺）→ 05 改条件重算（断言跨档进 diff.changed）→ 异常路径（信息不足 → info_insufficient + next_step）。
+
+## 8. 设计要点（对应验收）
+
+- **可单测**：引擎与端点编排(`handlers.ts`)均为纯函数；`now`/`dataset_year` 可注入保证可复现。
+- **数据待抽取不误杀**：样本里 `plan=null`/批次线待公布 → 规则不阻断，改附 `caveat` + `needs_review`（对应异常路径「需人工复核」「数据过期」），不被样本缺值污染资格结论。
+- **三红线**：资格判定=确定性纯函数；概率档标「位次差法 + 数据年份，非预测」；LLM 只做建条件+理由润色（见 §5，待 provider 确认后接入）。
+
+## 9. 待办（本分支之后）
+
+- [x] ~~数据 48h 样本字段对齐后，补一份 `__tests__` 用真实样本跑通资格+比较。~~（已做：`tests/e2e-dataset.test.ts` + `tests/fixtures/`）
+- [x] ~~API Route 薄封装（等全栈 App Router 工程就位后挂上）。~~（已挂：`app/api/*/route.ts`，含最小 Next.js 骨架）
+- [ ] LLM 编排模块（选定 provider 后）：对话建条件 + 推荐理由润色。见 MAO-14。
+- [ ] 全栈联调：鉴权/RLS、plan 表挂 Profile、前端志愿卡。

@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "scope": "江苏 · 2026 · 物理类（示例考生：637 分 / 位次 5,200 / 选考 物理+化学）",
+    "data_status": "draft — 仅填充 2024 真实投档分/位次；2023/2025、计划数、学费待从 jseea.cn 抽取",
+    "official_sources": {
+      "投档线_2024": "https://www.jseea.cn/ （江苏省2024年普通类本科批次平行志愿投档线 PDF）",
+      "投档线_2025": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+      "选科要求": "https://www.jseea.cn/ （拟在江苏招生本科专业选考科目要求） / https://gaokao.chsi.com.cn/",
+      "招生计划": "https://www.jseea.cn/ （江苏招生计划汇编 / 志愿填报辅助系统）"
+    },
+    "currency_note": "rank_diff = 考生位次 − 专业组投档位次；位次数越小越好，负值 = 考生优于该年投档线",
+    "disclaimer": "probability_ref 为参考方法（位次差法），非录取预测；最终以官方录取为准"
+  },
+  "candidate_context": {
+    "province": "江苏", "year": 2026, "track": "物理类",
+    "score": 637, "rank": 5200, "subjects": ["物理", "化学"]
+  },
+  "cards": [
+    {
+      "id": "SEU-08",
+      "school": { "name": "东南大学", "code": null, "_code_note": "院校代号待从计划汇编核对", "region": "江苏·南京", "level_tags": ["985", "211", "双一流", "公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "08", "subject_requirement": { "preferred": "物理", "reselect_required": ["化学"], "reselect_options": [], "raw_text": "首选物理，再选化学" } },
+      "recruitment": { "plan_2024": null, "_plan_note": "东南大学2024江苏物理类本科批共20专业、计划494人（校总量，非本组数，待拆到专业组）", "duration_years": 4, "tuition": null, "_tuition_note": "待抽取（公办工科约 5000–6380 元/年）" },
+      "history": [
+        { "year": 2024, "plan": null, "min_score": 646, "min_rank": 5945, "rank_diff": -745 }
+      ],
+      "rank_diff_vs_candidate": -745,
+      "probability_ref": { "tier": "稳妥", "pct_ref_band": "40–75%", "method": "位次差法", "data_years": [2024], "_note": "待补 2023/2025 后用命中比例细化" },
+      "reason": "考生位次(5200)优于该组 2024 投档线(5945)约 745 名，处于稳妥区间。",
+      "source": { "publisher": "江苏省教育考试院", "url": "https://www.jseea.cn/", "retrieved_via": "聚合站 gaokao.cn（2024 东南大学江苏物理类专业组08 投档 646/5945）", "updated": "2024-07", "accessed": "2026-07-27", "status": "待官方复核" },
+      "caveats": ["仅 2024 一年数据，近3年趋势待补（2025 官方 PDF 已定位，见 _meta.official_sources.投档线_2025）", "聚合站对该组 2024 投档数据有出入（646/5945 vs 644/6362），以 jseea.cn 官方 PDF 为准——待复核", "计划数/学费待抽取", "2026 实际投档线以录取后官方公布为准"]
+    },
+    {
+      "id": "NJUST-03",
+      "school": { "name": "南京理工大学", "code": null, "_code_note": "院校代号待核对", "region": "江苏·南京", "level_tags": ["211", "双一流", "公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "03", "subject_requirement": { "preferred": "物理", "reselect_required": ["化学"], "reselect_options": [], "raw_text": "首选物理，再选化学" } },
+      "recruitment": { "plan_2024": null, "duration_years": 4, "tuition": null, "_tuition_note": "待抽取" },
+      "history": [
+        { "year": 2024, "plan": null, "min_score": 641, "min_rank": 7633, "rank_diff": -2433 }
+      ],
+      "rank_diff_vs_candidate": -2433,
+      "probability_ref": { "tier": "保底", "pct_ref_band": ">75%", "method": "位次差法", "data_years": [2024], "_note": "待补 2023/2025" },
+      "reason": "考生位次(5200)明显优于该组 2024 投档线(7633)约 2433 名，保底较稳。",
+      "source": { "publisher": "江苏省教育考试院", "url": "https://www.jseea.cn/", "retrieved_via": "聚合站（2024 南京理工大学江苏物理类专业组03 投档 641/7633）", "updated": "2024-07", "accessed": "2026-07-27", "status": "待官方复核" },
+      "caveats": ["仅 2024 一年数据", "计划数/学费待抽取", "保底不等于必录"]
+    },
+    {
+      "id": "NJUST-02",
+      "school": { "name": "南京理工大学", "code": null, "_code_note": "院校代号待核对", "region": "江苏·南京", "level_tags": ["211", "双一流", "公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "02", "subject_requirement": { "preferred": "物理", "reselect_required": ["化学"], "reselect_options": [], "raw_text": "首选物理，再选化学" } },
+      "recruitment": { "plan_2024": null, "duration_years": 4, "tuition": null, "_tuition_note": "待抽取" },
+      "history": [
+        { "year": 2024, "plan": null, "min_score": 653, "min_rank": 3987, "rank_diff": 1213 }
+      ],
+      "rank_diff_vs_candidate": 1213,
+      "probability_ref": { "tier": "冲刺", "pct_ref_band": "<40%", "method": "位次差法", "data_years": [2024], "_note": "待补 2023/2025" },
+      "reason": "考生位次(5200)低于该组 2024 投档线(3987)约 1213 名，差距在追赶范围内，可作冲刺。",
+      "source": { "publisher": "江苏省教育考试院", "url": "https://www.jseea.cn/", "retrieved_via": "聚合站（2024 南京理工大学江苏物理类专业组02 投档 653/3987）", "updated": "2024-07", "accessed": "2026-07-27", "status": "待官方复核" },
+      "caveats": ["仅 2024 一年数据", "计划数/学费待抽取", "冲刺=参考，非录取承诺"]
+    }
+  ]
+}
