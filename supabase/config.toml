@@ -1,0 +1,43 @@
+# Supabase 本地开发栈配置（Issue MAO-2）
+# 本地跑：supabase start  （需已装 supabase CLI + Docker）
+# 这会起一个本地 Postgres + GoTrue(Auth) + Studio，QA 可在本地完整验 RLS / 隔离，无需远程项目或 maozh2 的 keys。
+#
+# 本地栈起来后，把 .env 指向本地：
+#   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY=<supabase start 输出的 anon key>
+#   SUPABASE_URL=http://127.0.0.1:54321
+#   SUPABASE_SERVICE_ROLE_KEY=<supabase start 输出的 service_role key>
+#   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+#   DIRECT_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+# 然后：npm run db:setup && npm run seed
+
+project_id = "ai-school-admission-planning"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["https://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false  # 本地免邮件确认；seed 仍显式 email_confirm=true
+
+[studio]
+enabled = true
+port = 54323
