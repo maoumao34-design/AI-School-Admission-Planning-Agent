@@ -4,13 +4,14 @@
 
 ## 任务说明
 
-仓库里三份文档配套看：
+仓库里四份文档配套看：
 
 👉 **[TASK-SPEC.md](./TASK-SPEC.md)** — 做什么（范围/核心功能/流程/志愿卡/验收）
 👉 **[DELIVERY-STANDARD.md](./DELIVERY-STANDARD.md)** — 怎么交、交到什么程度（完整交付/评分流程）
-👉 **[RND-PROCESS.md](./RND-PROCESS.md)** — 怎么研发（四阶段路径：背景与需求→产品方案→技术实现→验证迭代）
+👉 **[RND-PROCESS.md](./RND-PROCESS.md)** — 怎么研发（四阶段路径）
+👉 **[COLLABORATION.md](./COLLABORATION.md)** — 怎么协作（分支/提交/评审合并/部署）
 
-> 所有 agent 接到任务后，请**先读这三份**，再开始工作。设计以 TASK-SPEC 为准，研发按 RND-PROCESS 路径推进，交付对照 DELIVERY-STANDARD。
+> 所有 agent 接到任务后，请**先读这四份**，再开始工作。
 
 ## 团队角色
 
