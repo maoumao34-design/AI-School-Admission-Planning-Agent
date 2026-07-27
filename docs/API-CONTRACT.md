@@ -2,7 +2,7 @@
 
 > 作者：AI 工程师（决策核心） · 分支 `ai-eng/api-contract`
 > 对齐：TASK-SPEC §3-7、PRD-v1、数据角色候选卡/规则表 schema。
-> 状态：**v2 — 类型已对齐数据 JSON、路由已挂载、单测+QA 脚本就绪**。待 全栈/QA 联调。
+> 状态：**v3 — 引擎对齐数据 canonical 4 类规则(subject_match/batch/tuition_le/plan_gt)，真实规则调用成立**。待 全栈/QA 联调。
 
 本文件定义决策核心对外暴露的三个端点 + 数据结构，供全栈对接、QA 脚本驱动。
 类型定义见 [`src/decision/types.ts`](../src/decision/types.ts)；纯函数引擎见 [`src/decision/engine.ts`](../src/decision/engine.ts)；
@@ -128,7 +128,8 @@ JSON 适配层（消费数据角色交付的 JSON）见 [`src/decision/adapter.t
 ## 6. 对齐请求（状态：数据已交付，类型已对齐）
 
 - **数据**：✅ 已对齐。`types.ts` 的 `CandidateCard` / `Rule` 现直接消费 `data/sample-jiangsu-2026-phys.json`、`data/rules.example.json`（少量表示差异由 `adapter.ts` 归一：`candidate_context.subjects`→`SubjectSelection`、`recruitment.plan_<year>`→`plan_by_year`）。字段名若再变，只改 `adapter.ts`。
-  - 规则 `machine.type` 实际为：`subject_match | score_threshold | flag | presence`（数据角色交付值），引擎均已分派实现。
+  - 规则 `machine.type` canonical 4 类（数据与引擎共同认定）：`subject_match(params.required[]) | batch(params.allowed[]) | tuition_le(params.max) | plan_gt(params.min)`，引擎均已分派为真资格门。
+    - **批次线(分数过线)校验**：`batch` 规则检查「卡批次 ∈ allowed」（仅推本科批）；raw_text 提及的“考生分数须达本科线”因 2026 批次线待官方公布，暂未进 machine 参数——待公布后可新增 `score_threshold` 类规则，不破坏现有契约。
 - **全栈**：`src/decision/` 是纯 TS、无 Next.js 依赖；API Routes 已挂为 `app/api/{eligibility,compare,recompute}/route.ts`（Next.js App Router），直接放进你的工程即可。`profileId` 我预留了（recompute 端点），plan 表挂 Profile 下由你管。
 - **QA**：三端点可直接脚本驱动；`npm run qa` 跑 6 步黑盒回归（见下「快速验证」）；异常路径（`outcome.status != 'ok'`）有 `reason + next_step`，可断言。
 

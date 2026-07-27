@@ -28,51 +28,34 @@ const rulesFile = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/rules.ex
 const rules = Array.isArray(rulesFile) ? rulesFile : rulesFile.rules;
 
 // 01 对话建立条件（这里直接取样本考生上下文；线上由 LLM 从自然语言抽取）
-const candidate = {
-  province: sample.candidate_context.province,
-  year: sample.candidate_context.year,
-  subject: {
-    category: sample.candidate_context.track,
-    primary: sample.candidate_context.subjects[0],
-    secondary: sample.candidate_context.subjects.slice(1),
-  },
-  score: sample.candidate_context.score,
-  rank: sample.candidate_context.rank,
-};
+const candidate = sample.candidate_context; // {province,year,subject{...},score,rank}
 const candidates = sample.cards;
 
 let failures = 0;
 const step = (n, title) => console.log(`\n——— 步骤 ${n}：${title} ———`);
-
 function assert(cond, msg) {
-  if (cond) {
-    console.log(`  ✅ ${msg}`);
-  } else {
-    console.error(`  ❌ ${msg}`);
-    failures++;
-  }
+  if (cond) console.log(`  ✅ ${msg}`);
+  else { console.error(`  ❌ ${msg}`); failures++; }
 }
-
 async function post(path, body) {
-  const res = await fetch(BASE + path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json();
-  return { status: res.status, json };
+  const res = await fetch(BASE + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  return { status: res.status, json: await res.json() };
 }
 
 console.log(`QA 6 步回归 · 目标服务 ${BASE}（端到端只跑一个服务）`);
 
 // 03 资格校验 ----------------------------------------------------------------
-step('03', '资格校验 POST /api/eligibility');
+step('03', '资格校验 POST /api/eligibility（4 类规则真判定）');
 {
   const { status, json } = await post('/api/eligibility', { candidate, candidates, rules });
   assert(status === 200, `HTTP 200（实际 ${status}）`);
-  assert(['ok', 'needs_manual_review'].includes(json.outcome?.status), `outcome 通过/需复核（实际 ${json.outcome?.status}）`);
+  assert(json.outcome?.status === 'ok', `outcome=ok（实际 ${json.outcome?.status}）`);
   const passed = (json.data ?? []).filter((r) => r.passed);
-  assert(passed.length === 3, `3 个候选通过资格（实际 ${passed.length}）`);
+  assert(passed.length === 4, `4 个候选通过资格（实际 ${passed.length}）`);
+  // 真实规则调用：batch/tuition_le/plan_gt 不落 default
+  const sample0 = (json.data ?? [])[0];
+  const blockingCount = sample0?.evaluated_rules?.filter((e) => e.blocking)?.length ?? 0;
+  assert(blockingCount === 4, `4 条规则均为真资格门(blocking)（实际 ${blockingCount}）`);
   assert(json.trace?.rules_applied?.length === 4, `trace 记录 4 条规则（实际 ${json.trace?.rules_applied?.length}）`);
 }
 
@@ -86,18 +69,14 @@ step('04', '方案比较 POST /api/compare');
   const tier = (id) => groups[0]?.candidates.find((c) => c.id === id)?.probability_ref?.tier;
   assert(tier('SEU-08') === '稳妥', `SEU-08=稳妥（实际 ${tier('SEU-08')}）`);
   assert(tier('NJUST-03') === '保底', `NJUST-03=保底（实际 ${tier('NJUST-03')}）`);
-  assert(tier('NJUST-02') === '冲刺', `NJUST-02=冲刺（实际 ${tier('NJUST-02')}）`);
+  assert(tier('HHU-05') === '保底', `HHU-05=保底（实际 ${tier('HHU-05')}）`);
+  assert(tier('SEU-06') === '差距过大', `SEU-06=差距过大（实际 ${tier('SEU-06')}）`);
 }
 
 // 05 改条件重算 --------------------------------------------------------------
 step('05', '改条件重算 POST /api/recompute');
 {
-  const { status, json } = await post('/api/recompute', {
-    baseline: candidate,
-    changes: { rank: 4000 },
-    candidates,
-    rules,
-  });
+  const { status, json } = await post('/api/recompute', { baseline: candidate, changes: { rank: 4000 }, candidates, rules });
   assert(status === 200, `HTTP 200（实际 ${status}）`);
   const changed = (json.data?.diff?.changed ?? []).find((c) => c.candidate_id === 'SEU-08');
   assert(!!changed, `SEU-08 跨档进 diff.changed（稳妥→保底）`);
@@ -107,20 +86,11 @@ step('05', '改条件重算 POST /api/recompute');
 // 异常路径 ------------------------------------------------------------------
 step('异常', '信息不足 → info_insufficient');
 {
-  const { json } = await post('/api/eligibility', {
-    candidate: { province: '江苏', year: 2026 },
-    candidates,
-    rules,
-  });
+  const { json } = await post('/api/eligibility', { candidate: { province: '江苏', year: 2026 }, candidates, rules });
   assert(json.outcome?.status === 'info_insufficient', `缺条件 → info_insufficient（实际 ${json.outcome?.status}）`);
   assert(!!json.outcome?.next_step, `附 next_step`);
 }
 
 console.log('\n========================================');
-if (failures === 0) {
-  console.log('✅ QA 6 步回归全过');
-  process.exit(0);
-} else {
-  console.error(`❌ ${failures} 项失败`);
-  process.exit(1);
-}
+if (failures === 0) { console.log('✅ QA 6 步回归全过'); process.exit(0); }
+else { console.error(`❌ ${failures} 项失败`); process.exit(1); }

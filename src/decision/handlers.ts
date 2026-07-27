@@ -19,7 +19,6 @@ import {
   DEFAULT_DATA_YEARS,
 } from './engine';
 import type {
-  BatchLines,
   CandidateCard,
   CandidateConditions,
   ComparisonRequest,
@@ -69,7 +68,7 @@ export function handleEligibility(
     );
   }
 
-  const results = checkEligibility({ candidate, candidates, rules, batch_lines: req.batch_lines });
+  const results = checkEligibility({ candidate, candidates, rules });
   const passed = results.filter((r) => r.passed);
   if (passed.length === 0) {
     const outcome: Outcome = noResult(
@@ -132,7 +131,6 @@ export interface RecomputeHandlerRequest {
   // 数据集由调用方注入（服务端从 data/ 装配，不入判定逻辑）
   candidates: CandidateCard[];
   rules: Rule[];
-  batch_lines?: BatchLines;
 }
 
 export function handleRecompute(
@@ -155,7 +153,6 @@ export function handleRecompute(
   const dataset: Dataset = {
     candidates: arr<CandidateCard>(req.candidates),
     rules,
-    batch_lines: req.batch_lines,
   };
   const result = recompute({ profile_id: req.profile_id, baseline, changes: req.changes }, dataset, datasetYear);
 
