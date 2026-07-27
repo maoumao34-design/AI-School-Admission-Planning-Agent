@@ -1,0 +1,190 @@
+{
+  "_meta": {
+    "scope": "江苏 · 2026 · 物理类（示例考生：637 分 / 位次 5,200 / 选考 物理+化学）",
+    "schema_aligned_to": "src/decision/types.ts (ai-eng/api-contract) — CandidateCard / Rule，引擎可直接加载本文件消费",
+    "data_status": "sample — 投档最低分(min_score)取自 jseea.cn 官方投档线(权威、各源一致)；最低位次(min_rank)由一分一段表派生(各聚合站有约±300位出入，已标 status=待官方复核)；本组精确计划数待《江苏招生计划》汇编抽取",
+    "official_sources": {
+      "投档线_2025_物理类": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+      "投档线_2024_物理类": "https://www.jseea.cn/webfile/index/index_zkxx/2024-07-18/7219509116052443136.html",
+      "投档线_2023_物理类": "https://www.jseea.cn/webfile/index/index_zkxx/2023-07-18/7086888854866628608.html",
+      "一分一段表_2025_物理类": "https://www.jseea.cn/webfile/index/index_zkxx/2025-06-24/7343234265133355008.html",
+      "选科要求": "https://www.jseea.cn/ （拟在江苏招生本科专业选考科目要求）/ https://gaokao.chsi.com.cn/",
+      "招生计划": "https://www.jseea.cn/ （江苏招生计划汇编 / 志愿填报辅助系统）",
+      "学费_章程": "各校本科招生章程 + 苏价费〔2014〕136号（工科5800 / 理科5500 / 文科5200 / 艺术6800；省优势学科上浮10%→6380）"
+    },
+    "probability_method": "位次差法（确定性算术，非录取预测）：rank_diff = 考生位次 − 该组最近年(2025)投档位次；>=0 冲刺 / <-1500 保底 / 中间稳妥。标注 method+data_years=2023-2025",
+    "disclaimer": "probability_ref 为参考方法（位次差法），非录取预测；最终以官方录取为准。三条红线：只规划不承诺录取；官方事实/规则判断/AI建议分层；最终以官方页面为准。"
+  },
+  "candidate_context": {
+    "province": "江苏",
+    "year": 2026,
+    "subject": { "category": "物理类", "primary": "物理", "secondary": ["化学"] },
+    "score": 637,
+    "rank": 5200
+  },
+  "cards": [
+    {
+      "id": "SEU-06",
+      "school": {
+        "name": "东南大学",
+        "code": "1102",
+        "region": "江苏·南京",
+        "level_tags": ["985", "211", "双一流", "公办"],
+        "batch": "普通类本科批"
+      },
+      "major_group": {
+        "group_no": "06",
+        "subject_requirement": "物理+化学",
+        "majors": ["工科试验班(吴健雄班)", "电子信息类", "计算机类", "集成电路设计与集成系统", "未来机器人"]
+      },
+      "recruitment": {
+        "plan": 503,
+        "plan_granularity": "校·物理类总量(非本组；本组精确计划待计划汇编抽取)",
+        "duration": 4,
+        "tuition": 6380,
+        "tuition_note": "工科优势学科 6380；组内‘未来机器人’5800、理科试验班5500(苏价费〔2014〕136号+省优势学科上浮10%)"
+      },
+      "history": [
+        { "year": 2023, "plan": null, "min_score": null, "min_rank": 2578, "rank_diff": 2622, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2023-07-18/7086888854866628608.html", "publisher": "江苏省教育考试院", "updated": "2023-07-18", "status": "位次已核/2023投档最低分待从官方PDF补", "rank_via": "一分一段表派生" } },
+        { "year": 2024, "plan": 494, "min_score": 660, "min_rank": 2297, "rank_diff": 2903, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2024-07-18/7219509116052443136.html", "publisher": "江苏省教育考试院", "updated": "2024-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } },
+        { "year": 2025, "plan": 503, "min_score": 657, "min_rank": 2618, "rank_diff": 2582, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf", "publisher": "江苏省教育考试院", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } }
+      ],
+      "rank_diff_vs_candidate": 2582,
+      "probability_ref": { "tier": "冲刺", "pct_ref_band": "<40%", "method": "近3年位次差法", "data_years": "2023-2025" },
+      "reason": "考生位次(5200)低于该组2025投档位次(2618)约2582名，差距超出追赶区间(>1500)，属激进冲刺（吴健雄班/电子信息等拔尖组）。",
+      "source": {
+        "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+        "publisher": "江苏省教育考试院",
+        "updated": "2025-07-18",
+        "status": "待官方复核"
+      },
+      "caveats": [
+        "rank_diff>+1500，按位次差法属‘差距过大’的激进冲刺，仅供参考非录取承诺",
+        "2023投档最低分(min_score)待从2023官方PDF补；2023位次已取",
+        "recruitment.plan 为该校物理类本科批招生计划总量，本组精确计划待《江苏招生计划》汇编抽取"
+      ]
+    },
+    {
+      "id": "SEU-08",
+      "school": {
+        "name": "东南大学",
+        "code": "1102",
+        "region": "江苏·南京",
+        "level_tags": ["985", "211", "双一流", "公办"],
+        "batch": "普通类本科批"
+      },
+      "major_group": {
+        "group_no": "08",
+        "subject_requirement": "物理+化学",
+        "majors": ["工科试验班", "能源动力工程", "网络空间安全", "生物科学", "智慧交通", "智能建造"]
+      },
+      "recruitment": {
+        "plan": 503,
+        "plan_granularity": "校·物理类总量(非本组；本组精确计划待计划汇编抽取)",
+        "duration": 4,
+        "tuition": 6380,
+        "tuition_note": "工科优势学科 6380(苏价费〔2014〕136号+上浮10%)"
+      },
+      "history": [
+        { "year": 2023, "plan": null, "min_score": 647, "min_rank": 5894, "rank_diff": -694, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2023-07-18/7086888854866628608.html", "publisher": "江苏省教育考试院", "updated": "2023-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } },
+        { "year": 2024, "plan": 494, "min_score": 646, "min_rank": 5644, "rank_diff": -444, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2024-07-18/7219509116052443136.html", "publisher": "江苏省教育考试院", "updated": "2024-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } },
+        { "year": 2025, "plan": 503, "min_score": 644, "min_rank": 6362, "rank_diff": -1162, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf", "publisher": "江苏省教育考试院", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } }
+      ],
+      "rank_diff_vs_candidate": -1162,
+      "probability_ref": { "tier": "稳妥", "pct_ref_band": "40-75%", "method": "近3年位次差法", "data_years": "2023-2025" },
+      "reason": "近3年(2023-2025)投档位次 5894/5644/6362，考生5200稳定优于该组投档线694~1162名，处稳妥区间。",
+      "source": {
+        "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+        "publisher": "江苏省教育考试院",
+        "updated": "2025-07-18",
+        "status": "待官方复核"
+      },
+      "caveats": [
+        "min_score(647/646/644)取自官方投档线(权威)；min_rank由一分一段表派生，各聚合站有约±300位出入(如2024有源记5945)，以jseea.cn一分一段表为准",
+        "recruitment.plan 为该校物理类本科批招生计划总量，本组精确计划待《江苏招生计划》汇编抽取"
+      ]
+    },
+    {
+      "id": "NJUST-03",
+      "school": {
+        "name": "南京理工大学",
+        "code": "1104",
+        "region": "江苏·南京",
+        "level_tags": ["211", "双一流", "公办"],
+        "batch": "普通类本科批"
+      },
+      "major_group": {
+        "group_no": "03",
+        "subject_requirement": "物理+化学",
+        "majors": ["机械类", "兵器类", "电子信息类", "计算机类", "自动化类", "材料类", "微电子科学与工程", "能源动力工程", "光电信息科学与工程", "数学类"]
+      },
+      "recruitment": {
+        "plan": 462,
+        "plan_granularity": "校·物理类总量(2024=462；本组精确计划待计划汇编抽取)",
+        "duration": 4,
+        "tuition": 6380,
+        "tuition_note": "优势学科(兵器/电子信息/计算机/自动化/微电子等)6380；能源动力5800、光电6050、数学5500(苏价费〔2014〕136号+上浮10%)"
+      },
+      "history": [
+        { "year": 2023, "plan": null, "min_score": 653, "min_rank": 4396, "rank_diff": 804, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2023-07-18/7086888854866628608.html", "publisher": "江苏省教育考试院", "updated": "2023-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } },
+        { "year": 2024, "plan": 462, "min_score": 641, "min_rank": 7633, "rank_diff": -2433, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2024-07-18/7219509116052443136.html", "publisher": "江苏省教育考试院", "updated": "2024-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } },
+        { "year": 2025, "plan": null, "min_score": 642, "min_rank": 6733, "rank_diff": -1533, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf", "publisher": "江苏省教育考试院", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } }
+      ],
+      "rank_diff_vs_candidate": -1533,
+      "probability_ref": { "tier": "保底", "pct_ref_band": ">75%", "method": "近3年位次差法", "data_years": "2023-2025" },
+      "reason": "2024/2025投档位次(7633/6733)明显低于考生(5200)1533~2433名，保底较稳；注意2023该组位次4396(高于考生)——年际波动大，保底判断以最近两年为准。",
+      "source": {
+        "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+        "publisher": "江苏省教育考试院",
+        "updated": "2025-07-18",
+        "status": "待官方复核"
+      },
+      "caveats": [
+        "该组2023位次4396(高于考生)而2024/2025降至6733~7633，年际波动显著——体现‘改年份/条件随动’的必要性，保底档以最近年为准",
+        "recruitment.plan 为南京理工大学2024江苏物理类本科批招生计划总量(462人)，本组精确计划待《江苏招生计划》汇编抽取",
+        "保底不等于必录"
+      ]
+    },
+    {
+      "id": "HHU-05",
+      "school": {
+        "name": "河海大学",
+        "code": "1105",
+        "region": "江苏·南京/常州",
+        "level_tags": ["211", "双一流", "公办"],
+        "batch": "普通类本科批"
+      },
+      "major_group": {
+        "group_no": "05",
+        "subject_requirement": "物理+化学",
+        "majors": ["水利类", "土木类", "环境科学与工程类", "能源与动力工程(水利方向)"]
+      },
+      "recruitment": {
+        "plan": 949,
+        "plan_granularity": "校·物理类总量(非本组；本组精确计划待计划汇编抽取)",
+        "duration": 4,
+        "tuition": 5800,
+        "tuition_note": "工科标准5800(苏价费〔2014〕136号)；省优势学科专业上浮10%"
+      },
+      "history": [
+        { "year": 2023, "plan": null, "min_score": 638, "min_rank": null, "rank_diff": null, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2023-07-18/7086888854866628608.html", "publisher": "江苏省教育考试院", "updated": "2023-07-18", "status": "2023该组选科口径为‘不限’，与2024/2025‘化学’不一致；位次参考性有限，待核", "rank_via": "一分一段表派生" } },
+        { "year": 2024, "plan": null, "min_score": 632, "min_rank": 11188, "rank_diff": -5988, "source": { "url": "https://www.jseea.cn/webfile/index/index_zkxx/2024-07-18/7219509116052443136.html", "publisher": "江苏省教育考试院", "updated": "2024-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } },
+        { "year": 2025, "plan": 949, "min_score": 638, "min_rank": 8837, "rank_diff": -3637, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf", "publisher": "江苏省教育考试院", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" } }
+      ],
+      "rank_diff_vs_candidate": -3637,
+      "probability_ref": { "tier": "保底", "pct_ref_band": ">75%", "method": "近3年位次差法", "data_years": "2023-2025" },
+      "reason": "2024/2025投档位次(11188/8837)远低于考生(5200)3637~5988名，保底充足。",
+      "source": {
+        "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+        "publisher": "江苏省教育考试院",
+        "updated": "2025-07-18",
+        "status": "待官方复核"
+      },
+      "caveats": [
+        "⚠️ 选科口径变化：2023年05组选科要求为‘不限’，2024起按教育部《普通高校本科招生专业选考科目要求指引》调整为‘化学’；近3年同组对比含口径变化，2023数据参考性有限(引擎按最近年2025判档，不受影响)",
+        "recruitment.plan 为该校物理类本科批招生计划总量，本组精确计划待《江苏招生计划》汇编抽取",
+        "保底不等于必录"
+      ]
+    }
+  ]
+}
