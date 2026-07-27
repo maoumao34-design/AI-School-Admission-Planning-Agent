@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "scope": "江苏 · 升学规划资格校验规则（草案）",
+    "status": "draft — 结构定稿，逐条官方来源与有效期在补",
+    "note": "machine.type 为引擎可执行判据类型；AI工程师 规则引擎据此实现纯函数"
+  },
+  "rules": [
+    {
+      "rule_id": "SUBJ-REQ-2024-001",
+      "category": "选科",
+      "applies_to": "major_group",
+      "raw_text": "2024 年起，多数理工农医类专业组要求首选物理、再选化学（教育部《普通高校本科招生专业选考科目要求指引》）。",
+      "machine": { "type": "subject_match", "preferred_required": "物理", "reselect_required": ["化学"] },
+      "source": { "publisher": "教育部 / 江苏省教育考试院", "url": "https://www.jseea.cn/", "doc": "2024年拟在江苏招生的普通高校本科专业选考科目要求", "effective_period": "2024–2026", "status": "待官方复核" }
+    },
+    {
+      "rule_id": "BATCH-QUAL-001",
+      "category": "批次/学历",
+      "applies_to": "global",
+      "raw_text": "考生成绩须达到江苏省当年普通类本科批次录取控制分数线。",
+      "machine": { "type": "score_threshold", "field": "candidate.score", "op": ">=", "ref": "batch_line.本科.物理类" },
+      "source": { "publisher": "江苏省教育考试院", "url": "https://www.jseea.cn/", "doc": "2026年江苏省普通高校招生录取控制分数线", "effective_period": "2026", "status": "待公布/复核" }
+    },
+    {
+      "rule_id": "FEE-NOTICE-001",
+      "category": "费用",
+      "applies_to": "major_group",
+      "raw_text": "中外合作办学等高收费专业组学费显著高于普通专业（约 5–7 万元/年），需考生/家长知悉。",
+      "machine": { "type": "flag", "field": "program_type", "equals": "中外合作办学", "advisory": true },
+      "source": { "publisher": "高校招生章程 / 阳光高考", "url": "https://gaokao.chsi.com.cn/", "effective_period": "随招生章程", "status": "待逐校核对" }
+    },
+    {
+      "rule_id": "PLAN-AVAIL-001",
+      "category": "计划",
+      "applies_to": "major_group",
+      "raw_text": "该专业组在江苏须有当年招生计划方可报考。",
+      "machine": { "type": "presence", "field": "recruitment.plan_<year>", "op": "> 0" },
+      "source": { "publisher": "江苏省教育考试院", "url": "https://www.jseea.cn/", "doc": "江苏招生计划（计划汇编 / 志愿填报辅助系统）", "effective_period": "2026", "status": "待抽取" }
+    }
+  ]
+}
