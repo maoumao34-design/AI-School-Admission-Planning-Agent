@@ -152,4 +152,14 @@ describe('异常路径 · outcome 显式产出', () => {
     expect(res.outcome.status).toBe('no_result');
     expect(res.outcome.next_step).toBeTruthy();
   });
+  it('后端兑底：再选>2门 → info_insufficient（防绕过前端的脏请求）', () => {
+    const overSecondary = { ...candidate, subject: { category: '物理类' as const, primary: '物理' as const, secondary: ['化学' as const, '生物' as const, '地理' as const] } };
+    const eligibility = handleEligibility({ candidate: overSecondary, candidates: dataset.candidates, rules: dataset.rules });
+    const compare = handleCompare({ candidate: overSecondary, candidates: dataset.candidates, rules: dataset.rules });
+    expect(eligibility.outcome.status).toBe('info_insufficient');
+    expect(eligibility.outcome.reason).toContain('最多 2 门');
+    expect(eligibility.data).toBeUndefined();
+    expect(compare.outcome.status).toBe('info_insufficient');
+    expect(compare.outcome.reason).toContain('最多 2 门');
+  });
 });

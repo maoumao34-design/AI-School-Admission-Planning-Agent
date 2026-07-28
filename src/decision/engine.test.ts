@@ -11,6 +11,7 @@ import {
   checkEligibilityPerCardSubject,
   compareFiltered,
   evaluateRule,
+  findConditionErrors,
   findMissingConditions,
   probabilityRef,
   rankCandidates,
@@ -308,6 +309,26 @@ describe('conditions validation', () => {
     expect(merged.score).toBe(700);
     expect(merged.preferences!.region).toEqual(['南京']);
     expect(merged.preferences!.schoolLevel).toEqual(['985']);
+  });
+});
+
+// ===========================================================================
+// findConditionErrors · 再选科目超限校验（后端/API 兑底，防绕过前端的脏请求）
+// ===========================================================================
+describe('findConditionErrors · 再选科目超限', () => {
+  it('再选 3 门(>2) → 返回错误信息', () => {
+    const errors = findConditionErrors(
+      candidate({ subject: { category: '物理类', primary: '物理', secondary: ['化学', '生物', '地理'] } }),
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain('最多 2 门');
+  });
+  it('再选 2 门 → 空（不拦正常请求）', () => {
+    expect(findConditionErrors(candidate())).toEqual([]);
+  });
+  it('再选 1/0 门 → 空（不拦不足，避免破坏样本/历史 candidate 与候选随动）', () => {
+    expect(findConditionErrors(candidate({ subject: { category: '物理类', primary: '物理', secondary: [] } }))).toEqual([]);
+    expect(findConditionErrors(candidate({ subject: { category: '物理类', primary: '物理', secondary: ['化学'] } }))).toEqual([]);
   });
 });
 

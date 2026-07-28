@@ -10,6 +10,7 @@ import {
   buildTrace,
   checkEligibilityPerCardSubject,
   compareFiltered,
+  findConditionErrors,
   findMissingConditions,
   needsManualReview,
   noResult,
@@ -68,6 +69,14 @@ export function handleEligibility(
     );
   }
 
+  const subjectErrors = findConditionErrors(candidate);
+  if (subjectErrors.length) {
+    return respond(
+      { status: 'info_insufficient', reason: `条件校验未通过：${subjectErrors.join('、')}`, next_step: '请修正上述条件后重试' },
+      trace,
+    );
+  }
+
   const results = checkEligibilityPerCardSubject({ candidate, candidates, rules });
   const passed = results.filter((r) => r.passed);
   if (passed.length === 0) {
@@ -112,6 +121,14 @@ export function handleCompare(
     );
   }
 
+  const subjectErrors = findConditionErrors(candidate);
+  if (subjectErrors.length) {
+    return respond(
+      { status: 'info_insufficient', reason: `条件校验未通过：${subjectErrors.join('、')}`, next_step: '请修正上述条件后重试' },
+      trace,
+    );
+  }
+
   if (!candidates?.length) {
     return respond(noResult('无可比较候选', '先调用资格校验获取通过候选，或传入候选列表'), trace, { groups: [], out_of_reach: [] });
   }
@@ -152,6 +169,14 @@ export function handleRecompute(
   if (missing.length) {
     return respond(
       { status: 'info_insufficient', reason: `baseline 缺少关键条件：${missing.join('、')}`, next_step: '请在对话中补充上述条件后重试' },
+      trace,
+    );
+  }
+
+  const subjectErrors = findConditionErrors(baseline);
+  if (subjectErrors.length) {
+    return respond(
+      { status: 'info_insufficient', reason: `baseline 条件校验未通过：${subjectErrors.join('、')}`, next_step: '请修正上述条件后重试' },
       trace,
     );
   }
