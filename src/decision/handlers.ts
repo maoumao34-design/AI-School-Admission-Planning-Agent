@@ -8,7 +8,7 @@
 
 import {
   buildTrace,
-  checkEligibility,
+  checkEligibilityPerCardSubject,
   compareFiltered,
   findMissingConditions,
   needsManualReview,
@@ -68,7 +68,7 @@ export function handleEligibility(
     );
   }
 
-  const results = checkEligibility({ candidate, candidates, rules });
+  const results = checkEligibilityPerCardSubject({ candidate, candidates, rules });
   const passed = results.filter((r) => r.passed);
   if (passed.length === 0) {
     const outcome: Outcome = noResult(

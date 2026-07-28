@@ -168,6 +168,50 @@ export function checkEligibility(req: EligibilityCheckRequest): EligibilityResul
   });
 }
 
+function evaluatePerCardSubjectRule(
+  rule: Rule,
+  candidate: CandidateConditions,
+  card: CandidateCard,
+): RuleEvaluation {
+  const passed = cardSubjectOk(card, candidate);
+  const req = card.major_group.subject_requirement || '未标注';
+  return {
+    rule_id: rule.rule_id,
+    category: rule.category,
+    passed,
+    blocking: true,
+    reason:
+      `${passed ? '通过' : '不通过'}：该组要求选科「${req}」，` +
+      `考生 ${candidate.subject.primary}+${candidate.subject.secondary.join('+')}`,
+    source: rule.source,
+  };
+}
+
+/**
+ * 资格校验的 subject_match 与 compare 保持一致：按每张卡自己的 subject_requirement 判定。
+ * 其他规则仍按规则表 machine 判定，保留规则 trace/source，不用全局 required 误杀「不限」组。
+ */
+export function checkEligibilityPerCardSubject(req: EligibilityCheckRequest): EligibilityResult[] {
+  return req.candidates.map((card) => {
+    const evaluated = req.rules.map((r) =>
+      r.machine.type === 'subject_match'
+        ? evaluatePerCardSubjectRule(r, req.candidate, card)
+        : evaluateRule(r, req.candidate, card),
+    );
+    const blocking_rules = evaluated.filter((r) => !r.passed && r.blocking);
+    const advisories = evaluated.map((r) => r.caveat).filter((x): x is string => typeof x === 'string');
+    const needs_review = evaluated.some((r) => r.passed && r.blocking === false && !!r.caveat);
+    return {
+      candidate_id: card.id,
+      passed: blocking_rules.length === 0,
+      evaluated_rules: evaluated,
+      blocking_rules,
+      advisories,
+      needs_review,
+    };
+  });
+}
+
 // ============================================================================
 // 3. 位次差 → 概率档（确定性算术，对齐 DATA-PACKAGE §3）
 // ============================================================================

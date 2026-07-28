@@ -67,6 +67,21 @@ describe('03 资格校验 · 真实样本（真实规则调用，非空转）', 
     expect(res.trace.dataset_year).toBe('2023-2025');
     expect(res.trace.generated_at).toBeTruthy();
   });
+  it('/api/eligibility 选科与 compare 一致：物理+不限不过度依赖全局 required', () => {
+    const mixedCandidates = [
+      { ...dataset.candidates[0], id: 'NEED-CHEM', major_group: { ...dataset.candidates[0].major_group, subject_requirement: '物理+化学' } },
+      { ...dataset.candidates[1], id: 'ANY-SECONDARY', major_group: { ...dataset.candidates[1].major_group, subject_requirement: '物理' } },
+    ];
+    const bioCandidate = { ...candidate, subject: { category: '物理类' as const, primary: '物理' as const, secondary: ['生物' as const] } };
+
+    const eligibility = handleEligibility({ candidate: bioCandidate, candidates: mixedCandidates, rules: dataset.rules });
+    const compare = handleCompare({ candidate: bioCandidate, candidates: mixedCandidates, rules: dataset.rules });
+
+    expect(eligibility.data!.find((r) => r.candidate_id === 'NEED-CHEM')?.passed).toBe(false);
+    expect(eligibility.data!.find((r) => r.candidate_id === 'ANY-SECONDARY')?.passed).toBe(true);
+    expect(compare.data!.groups[0].candidates.map((c) => c.id)).toContain('ANY-SECONDARY');
+    expect(compare.data!.groups[0].candidates.map((c) => c.id)).not.toContain('NEED-CHEM');
+  });
 });
 
 describe('04 方案比较 · 真实样本概率档（2025 最近年）', () => {

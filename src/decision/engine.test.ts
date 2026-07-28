@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyChanges,
   checkEligibility,
+  checkEligibilityPerCardSubject,
   compareFiltered,
   evaluateRule,
   findMissingConditions,
@@ -204,6 +205,25 @@ describe('checkEligibility · aggregation', () => {
     const results = checkEligibility({ candidate: candidate(), candidates: [makeCard({ id: 'A' })], rules });
     expect(results[0].passed).toBe(false);
     expect(results[0].blocking_rules).toHaveLength(1);
+  });
+  it('per-card subject_match：资格校验按各卡 subject_requirement，不被全局 required 误杀', () => {
+    const rules = [subjRule({ machine: { type: 'subject_match', params: { required: ['物理', '化学'] } } })];
+    const cards = [
+      makeCard({ id: 'A-chem', major_group: { group_no: '01', subject_requirement: '物理+化学' } }),
+      makeCard({ id: 'B-any', major_group: { group_no: '02', subject_requirement: '物理' } }),
+      makeCard({ id: 'C-bio', major_group: { group_no: '03', subject_requirement: '物理+生物' } }),
+    ];
+
+    const results = checkEligibilityPerCardSubject({
+      candidate: candidate({ subject: { category: '物理类', primary: '物理', secondary: ['生物'] } }),
+      candidates: cards,
+      rules,
+    });
+
+    expect(results.find((r) => r.candidate_id === 'A-chem')?.passed).toBe(false);
+    expect(results.find((r) => r.candidate_id === 'B-any')?.passed).toBe(true);
+    expect(results.find((r) => r.candidate_id === 'C-bio')?.passed).toBe(true);
+    expect(results.find((r) => r.candidate_id === 'B-any')?.evaluated_rules[0].reason).toContain('物理');
   });
   it('仅待抽取规则 → passed=true 且 needs_review=true，提示进 advisories', () => {
     const rules: Rule[] = [
