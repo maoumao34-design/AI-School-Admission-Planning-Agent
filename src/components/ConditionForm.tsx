@@ -49,11 +49,17 @@ export default function ConditionForm({
   const setSubject = (patch: Partial<CandidateConditions["subject"]>) =>
     onChange({ ...value, subject: { ...value.subject, ...patch } });
 
+  const secondary = value.subject.secondary;
+  const SECONDARY_MAX = 2; // 江苏 3+1+2：再选 化/生/政/地 取 2
   const toggleSecondary = (s: SecondarySubject) => {
-    const has = value.subject.secondary.includes(s);
-    const next = has
-      ? value.subject.secondary.filter((x) => x !== s)
-      : [...value.subject.secondary, s];
+    const has = secondary.includes(s);
+    if (has) {
+      setSubject({ secondary: secondary.filter((x) => x !== s) });
+      return;
+    }
+    // 已满 2 门再点第三个：自动顶替最早选的（不超过 2）
+    const next =
+      secondary.length >= SECONDARY_MAX ? [...secondary.slice(1), s] : [...secondary, s];
     setSubject({ secondary: next });
   };
 
@@ -105,18 +111,25 @@ export default function ConditionForm({
         </div>
 
         <div className="text-xs">
-          <span className="text-slate-500">再选科目（任选 2）</span>
+          <span className="text-slate-500">
+            再选科目（江苏 3+1+2，选 2 门）
+            <span className="ml-1 text-slate-400">
+              已选 {secondary.length}/{SECONDARY_MAX}{secondary.length >= SECONDARY_MAX ? " · 再选将替换最早" : ""}
+            </span>
+          </span>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {SECONDARY.map((s) => {
-              const on = value.subject.secondary.includes(s);
+              const on = secondary.includes(s);
+              const willReplace = !on && secondary.length >= SECONDARY_MAX;
               return (
                 <button
                   key={s}
                   type="button"
                   onClick={() => toggleSecondary(s)}
+                  title={willReplace ? "已满 2 门，点击将替换最早选的" : undefined}
                   className={`rounded-md border px-2 py-1 text-xs ${
                     on ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
+                  } ${willReplace ? "opacity-60" : ""}`}
                 >
                   {s}
                 </button>
