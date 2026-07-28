@@ -16,6 +16,7 @@
 import type {
   CandidateCard,
   CandidateConditions,
+  ComparisonResult,
   Dataset,
   DecisionResponse,
   DecisionTrace,
@@ -167,6 +168,50 @@ export function checkEligibility(req: EligibilityCheckRequest): EligibilityResul
   });
 }
 
+function evaluatePerCardSubjectRule(
+  rule: Rule,
+  candidate: CandidateConditions,
+  card: CandidateCard,
+): RuleEvaluation {
+  const passed = cardSubjectOk(card, candidate);
+  const req = card.major_group.subject_requirement || '未标注';
+  return {
+    rule_id: rule.rule_id,
+    category: rule.category,
+    passed,
+    blocking: true,
+    reason:
+      `${passed ? '通过' : '不通过'}：该组要求选科「${req}」，` +
+      `考生 ${candidate.subject.primary}+${candidate.subject.secondary.join('+')}`,
+    source: rule.source,
+  };
+}
+
+/**
+ * 资格校验的 subject_match 与 compare 保持一致：按每张卡自己的 subject_requirement 判定。
+ * 其他规则仍按规则表 machine 判定，保留规则 trace/source，不用全局 required 误杀「不限」组。
+ */
+export function checkEligibilityPerCardSubject(req: EligibilityCheckRequest): EligibilityResult[] {
+  return req.candidates.map((card) => {
+    const evaluated = req.rules.map((r) =>
+      r.machine.type === 'subject_match'
+        ? evaluatePerCardSubjectRule(r, req.candidate, card)
+        : evaluateRule(r, req.candidate, card),
+    );
+    const blocking_rules = evaluated.filter((r) => !r.passed && r.blocking);
+    const advisories = evaluated.map((r) => r.caveat).filter((x): x is string => typeof x === 'string');
+    const needs_review = evaluated.some((r) => r.passed && r.blocking === false && !!r.caveat);
+    return {
+      candidate_id: card.id,
+      passed: blocking_rules.length === 0,
+      evaluated_rules: evaluated,
+      blocking_rules,
+      advisories,
+      needs_review,
+    };
+  });
+}
+
 // ============================================================================
 // 3. 位次差 → 概率档（确定性算术，对齐 DATA-PACKAGE §3）
 // ============================================================================
@@ -267,6 +312,71 @@ export function compare(
     strategy: s,
     candidates: rankCandidates(eligible, candidate, s, dataYears),
   }));
+}
+
+/**
+ * 方案比较（带资格过滤 + 差距过大分离）——修补「换分/换选科候选集不变」红线。
+ *  1) 若传入 rules：先过 checkEligibility(含 subject_match) → 只留资格通过的候选；
+ *  2) 每策略排序；tier=差距过大(rank_diff>+1500) 的移出主列表、单独入 out_of_reach（保留透明度）。
+ * tier 只依赖 rank_diff（与策略无关），故 out_of_reach 取首策略排序去重即可。
+ */
+/**
+ * 按各卡自己的 subject_requirement 逐卡判定考生选科是否满足（per-card）。
+ * 数据侧约定：subject_requirement 按「+」拆——首段=首选、其余=再选必选；
+ * 只写「物理」(无 +) 或含「不限」= 再选不限。避免全局 subject_match 规则误杀「不限」组。
+ */
+export function cardSubjectOk(card: CandidateCard, candidate: CandidateConditions): boolean {
+  const req = card.major_group.subject_requirement;
+  if (!req || !req.trim()) return true; // 无标注 → 不阻断（转 caveat/人工复核）
+  const parts = req.split('+').map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return true;
+  const [primary, ...secondaryReq] = parts;
+  if (primary && primary !== candidate.subject.primary) return false; // 首选须匹配
+  // 再选：无要求 或 含「不限」→ 不限；否则考生再选须含全部要求
+  if (secondaryReq.length > 0 && !secondaryReq.includes('不限')) {
+    const have = new Set<string>(candidate.subject.secondary);
+    if (!secondaryReq.every((s) => have.has(s))) return false;
+  }
+  return true;
+}
+
+export function compareFiltered(
+  candidate: CandidateConditions,
+  candidates: CandidateCard[],
+  rules: Rule[] | undefined,
+  strategies: Strategy[] = ['院校优先', '专业优先'],
+  dataYears: string = DEFAULT_DATA_YEARS,
+): ComparisonResult {
+  // subject 按各卡 subject_requirement 逐卡判（per-card）；其他硬条件(批次/学费/计划)走规则表。
+  const nonSubjectRules = (rules ?? []).filter((r) => r.machine.type !== 'subject_match');
+  const eligible: CandidateCard[] = candidates.filter((c) => {
+    if (!cardSubjectOk(c, candidate)) return false;
+    if (nonSubjectRules.length) {
+      return checkEligibility({ candidate, candidates: [c], rules: nonSubjectRules }).some((r) => r.passed);
+    }
+    return true;
+  });
+
+  const rankedByStrategy = strategies.map((s) => ({
+    strategy: s,
+    candidates: rankCandidates(eligible, candidate, s, dataYears),
+  }));
+
+  const groups: StrategyGroup[] = rankedByStrategy.map((g) => ({
+    strategy: g.strategy,
+    candidates: g.candidates.filter((c) => c.probability_ref.tier !== '差距过大'),
+  }));
+
+  // 差距过大：tier 不随策略变，取首策略排序结果过滤即可（去重）
+  const outOfReach =
+    (rankedByStrategy[0]?.candidates ?? []).filter(
+      (c) => c.probability_ref.tier === '差距过大',
+    ) ?? [];
+
+  return {
+    groups,
+    out_of_reach: outOfReach,
+  };
 }
 
 function buildReason(card: CandidateCard, diff: number, tier: ProbabilityTier): string {
@@ -383,6 +493,8 @@ export function findMissingConditions(candidate: Partial<CandidateConditions> | 
   if (candidate.subject && (!candidate.subject.primary || !Array.isArray(candidate.subject.secondary))) {
     missing.push('选科(首选/再选)');
   }
+  // 注：再选正好2门是江苏3+1+2规则，由前端表单强制(全栈)；引擎不硬拦计数，
+  // 避免样本/历史 candidate(secondary≠2) 整个被 info_insufficient 阻断。subject_match 照常按实际选科过滤。
   return missing;
 }
 

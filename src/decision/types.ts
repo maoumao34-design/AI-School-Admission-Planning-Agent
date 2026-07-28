@@ -225,6 +225,8 @@ export interface RankedCandidate extends CandidateCard {
 export interface ComparisonRequest {
   candidate: CandidateConditions;
   candidates: CandidateCard[];
+  /** 可选：传入则先过资格校验(含 subject_match) 再排序——换选科才会筛掉不匹配候选 */
+  rules?: Rule[];
   strategies?: Strategy[];
   dataset_year?: string;
 }
@@ -232,6 +234,12 @@ export interface ComparisonRequest {
 export interface StrategyGroup {
   strategy: Strategy;
   candidates: RankedCandidate[];
+}
+
+/** 方案比较结果：主候选(资格通过且 tier ∈ {冲刺,稳妥,保底}) + 差距过大(不推荐，保留可展开) */
+export interface ComparisonResult {
+  groups: StrategyGroup[];
+  out_of_reach: RankedCandidate[];
 }
 
 // ============================================================================

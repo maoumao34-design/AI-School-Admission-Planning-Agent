@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyChanges,
   checkEligibility,
+  checkEligibilityPerCardSubject,
+  compareFiltered,
   evaluateRule,
   findMissingConditions,
   probabilityRef,
@@ -204,6 +206,25 @@ describe('checkEligibility · aggregation', () => {
     expect(results[0].passed).toBe(false);
     expect(results[0].blocking_rules).toHaveLength(1);
   });
+  it('per-card subject_match：资格校验按各卡 subject_requirement，不被全局 required 误杀', () => {
+    const rules = [subjRule({ machine: { type: 'subject_match', params: { required: ['物理', '化学'] } } })];
+    const cards = [
+      makeCard({ id: 'A-chem', major_group: { group_no: '01', subject_requirement: '物理+化学' } }),
+      makeCard({ id: 'B-any', major_group: { group_no: '02', subject_requirement: '物理' } }),
+      makeCard({ id: 'C-bio', major_group: { group_no: '03', subject_requirement: '物理+生物' } }),
+    ];
+
+    const results = checkEligibilityPerCardSubject({
+      candidate: candidate({ subject: { category: '物理类', primary: '物理', secondary: ['生物'] } }),
+      candidates: cards,
+      rules,
+    });
+
+    expect(results.find((r) => r.candidate_id === 'A-chem')?.passed).toBe(false);
+    expect(results.find((r) => r.candidate_id === 'B-any')?.passed).toBe(true);
+    expect(results.find((r) => r.candidate_id === 'C-bio')?.passed).toBe(true);
+    expect(results.find((r) => r.candidate_id === 'B-any')?.evaluated_rules[0].reason).toContain('物理');
+  });
   it('仅待抽取规则 → passed=true 且 needs_review=true，提示进 advisories', () => {
     const rules: Rule[] = [
       { rule_id: 'FEE', category: '费用', raw_text: '', machine: { type: 'tuition_le', params: { max: 60000 } }, source: { url: '', effective_period: '' } },
@@ -287,5 +308,41 @@ describe('conditions validation', () => {
     expect(merged.score).toBe(700);
     expect(merged.preferences!.region).toEqual(['南京']);
     expect(merged.preferences!.schoolLevel).toEqual(['985']);
+  });
+});
+
+// ===========================================================================
+// compareFiltered · 资格过滤 + 差距过大分离（红线修复：换分/换选科→候选集随之变）
+// ===========================================================================
+describe('compareFiltered · per-card 选科过滤 + 差距过大分离', () => {
+  const cards: CandidateCard[] = [
+    makeCard({ id: 'A-chem', major_group: { group_no: '01', subject_requirement: '物理+化学' }, history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] }),
+    makeCard({ id: 'B-bio', major_group: { group_no: '02', subject_requirement: '物理+生物' }, history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] }),
+    makeCard({ id: 'C-any', major_group: { group_no: '03', subject_requirement: '物理' }, history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] }),
+    makeCard({ id: 'D-reach', major_group: { group_no: '04', subject_requirement: '物理+化学' }, history: [{ year: 2024, plan: 10, min_score: 700, min_rank: 2000 }] }),
+  ];
+  const candChem = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['化学'] } });
+
+  it('per-card 选科：化学考生 → A-chem/C-any 在、B-bio(要生物) 出', () => {
+    const res = compareFiltered(candChem, cards, undefined);
+    const ids = res.groups[0].candidates.map((c) => c.id);
+    expect(ids).toContain('A-chem');
+    expect(ids).toContain('C-any'); // 「物理」不限 → 不卡再选
+    expect(ids).not.toContain('B-bio'); // 要生物，考生没有
+  });
+
+  it('换选科→候选随动：生物考生 → B-bio 在、A-chem(要化学) 出', () => {
+    const candBio = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['生物'] } });
+    const res = compareFiltered(candBio, cards, undefined);
+    const ids = res.groups[0].candidates.map((c) => c.id);
+    expect(ids).toContain('B-bio');
+    expect(ids).not.toContain('A-chem'); // 要化学，考生没有
+  });
+
+  it('差距过大(rank_diff>+1500)移出主列表、入 out_of_reach', () => {
+    const res = compareFiltered(candChem, cards, undefined);
+    const mainIds = res.groups.flatMap((g) => g.candidates.map((c) => c.id));
+    expect(mainIds).not.toContain('D-reach'); // 5200-2000=+3200 → 差距过大
+    expect(res.out_of_reach.map((c) => c.id)).toContain('D-reach');
   });
 });

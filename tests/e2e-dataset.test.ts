@@ -67,16 +67,32 @@ describe('03 资格校验 · 真实样本（真实规则调用，非空转）', 
     expect(res.trace.dataset_year).toBe('2023-2025');
     expect(res.trace.generated_at).toBeTruthy();
   });
+  it('/api/eligibility 选科与 compare 一致：物理+不限不过度依赖全局 required', () => {
+    const mixedCandidates = [
+      { ...dataset.candidates[0], id: 'NEED-CHEM', major_group: { ...dataset.candidates[0].major_group, subject_requirement: '物理+化学' } },
+      { ...dataset.candidates[1], id: 'ANY-SECONDARY', major_group: { ...dataset.candidates[1].major_group, subject_requirement: '物理' } },
+    ];
+    const bioCandidate = { ...candidate, subject: { category: '物理类' as const, primary: '物理' as const, secondary: ['生物' as const] } };
+
+    const eligibility = handleEligibility({ candidate: bioCandidate, candidates: mixedCandidates, rules: dataset.rules });
+    const compare = handleCompare({ candidate: bioCandidate, candidates: mixedCandidates, rules: dataset.rules });
+
+    expect(eligibility.data!.find((r) => r.candidate_id === 'NEED-CHEM')?.passed).toBe(false);
+    expect(eligibility.data!.find((r) => r.candidate_id === 'ANY-SECONDARY')?.passed).toBe(true);
+    expect(compare.data!.groups[0].candidates.map((c) => c.id)).toContain('ANY-SECONDARY');
+    expect(compare.data!.groups[0].candidates.map((c) => c.id)).not.toContain('NEED-CHEM');
+  });
 });
 
 describe('04 方案比较 · 真实样本概率档（2025 最近年）', () => {
   const res = handleCompare({ candidate, candidates: dataset.candidates });
   const tierOf = (id: string) => {
-    for (const g of res.data!) {
+    for (const g of res.data!.groups) {
       const c = g.candidates.find((x) => x.id === id);
       if (c) return c.probability_ref.tier;
     }
-    return null;
+    const oor = res.data!.out_of_reach.find((x) => x.id === id);
+    return oor ? oor.probability_ref.tier : null;
   };
 
   it('SEU-06=差距过大 / SEU-08=稳妥 / NJUST-03=保底 / HHU-05=保底', () => {
@@ -86,11 +102,11 @@ describe('04 方案比较 · 真实样本概率档（2025 最近年）', () => {
     expect(tierOf('HHU-05')).toBe('保底'); // diff -3637
   });
   it('院校优先排序：SEU-08(985+稳妥) 居首', () => {
-    const group = res.data!.find((g) => g.strategy === '院校优先')!;
+    const group = res.data!.groups.find((g) => g.strategy === '院校优先')!;
     expect(group.candidates[0].id).toBe('SEU-08');
   });
   it('每个候选 reason 含位次差 + 非预测声明', () => {
-    for (const g of res.data!) {
+    for (const g of res.data!.groups) {
       for (const c of g.candidates) {
         expect(c.reason).toContain('位次差');
         expect(c.reason).toContain('非录取预测');
