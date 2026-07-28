@@ -276,6 +276,26 @@ export function compare(
  *  2) 每策略排序；tier=差距过大(rank_diff>+1500) 的移出主列表、单独入 out_of_reach（保留透明度）。
  * tier 只依赖 rank_diff（与策略无关），故 out_of_reach 取首策略排序去重即可。
  */
+/**
+ * 按各卡自己的 subject_requirement 逐卡判定考生选科是否满足（per-card）。
+ * 数据侧约定：subject_requirement 按「+」拆——首段=首选、其余=再选必选；
+ * 只写「物理」(无 +) 或含「不限」= 再选不限。避免全局 subject_match 规则误杀「不限」组。
+ */
+export function cardSubjectOk(card: CandidateCard, candidate: CandidateConditions): boolean {
+  const req = card.major_group.subject_requirement;
+  if (!req || !req.trim()) return true; // 无标注 → 不阻断（转 caveat/人工复核）
+  const parts = req.split('+').map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return true;
+  const [primary, ...secondaryReq] = parts;
+  if (primary && primary !== candidate.subject.primary) return false; // 首选须匹配
+  // 再选：无要求 或 含「不限」→ 不限；否则考生再选须含全部要求
+  if (secondaryReq.length > 0 && !secondaryReq.includes('不限')) {
+    const have = new Set<string>(candidate.subject.secondary);
+    if (!secondaryReq.every((s) => have.has(s))) return false;
+  }
+  return true;
+}
+
 export function compareFiltered(
   candidate: CandidateConditions,
   candidates: CandidateCard[],
@@ -283,12 +303,15 @@ export function compareFiltered(
   strategies: Strategy[] = ['院校优先', '专业优先'],
   dataYears: string = DEFAULT_DATA_YEARS,
 ): ComparisonResult {
-  const eligible: CandidateCard[] =
-    rules && rules.length
-      ? candidates.filter((c) =>
-          checkEligibility({ candidate, candidates: [c], rules }).some((r) => r.passed),
-        )
-      : candidates;
+  // subject 按各卡 subject_requirement 逐卡判（per-card）；其他硬条件(批次/学费/计划)走规则表。
+  const nonSubjectRules = (rules ?? []).filter((r) => r.machine.type !== 'subject_match');
+  const eligible: CandidateCard[] = candidates.filter((c) => {
+    if (!cardSubjectOk(c, candidate)) return false;
+    if (nonSubjectRules.length) {
+      return checkEligibility({ candidate, candidates: [c], rules: nonSubjectRules }).some((r) => r.passed);
+    }
+    return true;
+  });
 
   const rankedByStrategy = strategies.map((s) => ({
     strategy: s,

@@ -294,34 +294,35 @@ describe('conditions validation', () => {
 // ===========================================================================
 // compareFiltered · 资格过滤 + 差距过大分离（红线修复：换分/换选科→候选集随之变）
 // ===========================================================================
-describe('compareFiltered · 资格过滤 + 差距过大分离', () => {
+describe('compareFiltered · per-card 选科过滤 + 差距过大分离', () => {
   const cards: CandidateCard[] = [
     makeCard({ id: 'A-chem', major_group: { group_no: '01', subject_requirement: '物理+化学' }, history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] }),
-    makeCard({ id: 'C-reach', major_group: { group_no: '03', subject_requirement: '物理+化学' }, history: [{ year: 2024, plan: 10, min_score: 700, min_rank: 2000 }] }),
+    makeCard({ id: 'B-bio', major_group: { group_no: '02', subject_requirement: '物理+生物' }, history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] }),
+    makeCard({ id: 'C-any', major_group: { group_no: '03', subject_requirement: '物理' }, history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] }),
+    makeCard({ id: 'D-reach', major_group: { group_no: '04', subject_requirement: '物理+化学' }, history: [{ year: 2024, plan: 10, min_score: 700, min_rank: 2000 }] }),
   ];
-  const rules: Rule[] = [subjRule()]; // required 物理+化学
-  const candWithChem = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['化学'] } });
-  const candNoChem = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['生物'] } });
+  const candChem = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['化学'] } });
 
-  it('带 rules + 考生齐 required(物理+化学) → 候选保留', () => {
-    const res = compareFiltered(candWithChem, cards, rules);
-    expect(res.groups[0].candidates.map((c) => c.id)).toContain('A-chem');
+  it('per-card 选科：化学考生 → A-chem/C-any 在、B-bio(要生物) 出', () => {
+    const res = compareFiltered(candChem, cards, undefined);
+    const ids = res.groups[0].candidates.map((c) => c.id);
+    expect(ids).toContain('A-chem');
+    expect(ids).toContain('C-any'); // 「物理」不限 → 不卡再选
+    expect(ids).not.toContain('B-bio'); // 要生物，考生没有
   });
 
-  it('带 rules + 考生缺 required(无化学) → 被 subject_match 过滤掉', () => {
-    const res = compareFiltered(candNoChem, cards, rules);
-    expect(res.groups[0].candidates.map((c) => c.id)).not.toContain('A-chem');
-  });
-
-  it('无 rules → 不过滤(都保留在主列表，除差距过大)', () => {
-    const res = compareFiltered(candWithChem, cards, undefined);
-    expect(res.groups[0].candidates.map((c) => c.id)).toContain('A-chem');
+  it('换选科→候选随动：生物考生 → B-bio 在、A-chem(要化学) 出', () => {
+    const candBio = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['生物'] } });
+    const res = compareFiltered(candBio, cards, undefined);
+    const ids = res.groups[0].candidates.map((c) => c.id);
+    expect(ids).toContain('B-bio');
+    expect(ids).not.toContain('A-chem'); // 要化学，考生没有
   });
 
   it('差距过大(rank_diff>+1500)移出主列表、入 out_of_reach', () => {
-    const res = compareFiltered(candWithChem, cards, rules);
+    const res = compareFiltered(candChem, cards, undefined);
     const mainIds = res.groups.flatMap((g) => g.candidates.map((c) => c.id));
-    expect(mainIds).not.toContain('C-reach'); // 5200-2000=+3200 → 差距过大
-    expect(res.out_of_reach.map((c) => c.id)).toContain('C-reach');
+    expect(mainIds).not.toContain('D-reach'); // 5200-2000=+3200 → 差距过大
+    expect(res.out_of_reach.map((c) => c.id)).toContain('D-reach');
   });
 });
