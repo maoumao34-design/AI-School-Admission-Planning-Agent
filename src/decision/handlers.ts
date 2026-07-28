@@ -8,8 +8,8 @@
 
 import {
   buildTrace,
-  checkEligibility,
-  compare,
+  checkEligibilityPerCardSubject,
+  compareFiltered,
   findMissingConditions,
   needsManualReview,
   noResult,
@@ -22,6 +22,7 @@ import type {
   CandidateCard,
   CandidateConditions,
   ComparisonRequest,
+  ComparisonResult,
   Dataset,
   DecisionResponse,
   EligibilityCheckRequest,
@@ -31,7 +32,6 @@ import type {
   RecomputeResponse,
   Rule,
   Strategy,
-  StrategyGroup,
 } from './types';
 
 export interface HandlerOptions {
@@ -68,7 +68,7 @@ export function handleEligibility(
     );
   }
 
-  const results = checkEligibility({ candidate, candidates, rules });
+  const results = checkEligibilityPerCardSubject({ candidate, candidates, rules });
   const passed = results.filter((r) => r.passed);
   if (passed.length === 0) {
     const outcome: Outcome = noResult(
@@ -97,11 +97,12 @@ export interface CompareHandlerRequest extends ComparisonRequest {}
 export function handleCompare(
   req: CompareHandlerRequest,
   opts: HandlerOptions = {},
-): DecisionResponse<StrategyGroup[]> {
+): DecisionResponse<ComparisonResult> {
   const datasetYear = opts.dataset_year ?? DEFAULT_DATA_YEARS;
   const candidate = (req.candidate ?? {}) as CandidateConditions;
   const candidates = arr<CandidateCard>(req.candidates);
-  const trace = buildTrace(candidate, [], datasetYear, opts.now);
+  const rules = arr<Rule>(req.rules);
+  const trace = buildTrace(candidate, rules, datasetYear, opts.now);
 
   const missing = findMissingConditions(candidate);
   if (missing.length) {
@@ -112,12 +113,17 @@ export function handleCompare(
   }
 
   if (!candidates?.length) {
-    return respond(noResult('无可比较候选', '先调用资格校验获取通过候选，或传入候选列表'), trace, []);
+    return respond(noResult('无可比较候选', '先调用资格校验获取通过候选，或传入候选列表'), trace, { groups: [], out_of_reach: [] });
   }
 
   const strategies: Strategy[] = req.strategies?.length ? req.strategies : ['院校优先', '专业优先'];
-  const groups = compare(candidates, candidate, strategies, datasetYear);
-  return respond(ok(`按 ${strategies.join('/')} 排序完成`), trace, groups);
+  const result = compareFiltered(candidate, candidates, rules, strategies, datasetYear);
+  const mainCount = result.groups[0]?.candidates.length ?? 0;
+  const oorCount = result.out_of_reach.length;
+  const reason = oorCount
+    ? `按 ${strategies.join('/')} 排序完成：主候选 ${mainCount}（资格通过且非差距过大），差距过大(不推荐) ${oorCount} 另列`
+    : `按 ${strategies.join('/')} 排序完成：主候选 ${mainCount}`;
+  return respond(ok(reason), trace, result);
 }
 
 // ----------------------------------------------------------------------------
