@@ -62,15 +62,18 @@ step('03', '资格校验 POST /api/eligibility（4 类规则真判定）');
 // 04 方案比较 ----------------------------------------------------------------
 step('04', '方案比较 POST /api/compare');
 {
-  const { status, json } = await post('/api/compare', { candidate, candidates });
+  const { status, json } = await post('/api/compare', { candidate, candidates, rules });
   assert(status === 200, `HTTP 200（实际 ${status}）`);
-  const groups = json.data ?? [];
+  const groups = json.data?.groups ?? [];
+  const outOfReach = json.data?.out_of_reach ?? [];
   assert(groups.length >= 2, `至少 2 套策略（实际 ${groups.length}）`);
   const tier = (id) => groups[0]?.candidates.find((c) => c.id === id)?.probability_ref?.tier;
+  const oorTier = (id) => outOfReach.find((c) => c.id === id)?.probability_ref?.tier;
   assert(tier('SEU-08') === '稳妥', `SEU-08=稳妥（实际 ${tier('SEU-08')}）`);
   assert(tier('NJUST-03') === '保底', `NJUST-03=保底（实际 ${tier('NJUST-03')}）`);
   assert(tier('HHU-05') === '保底', `HHU-05=保底（实际 ${tier('HHU-05')}）`);
-  assert(tier('SEU-06') === '差距过大', `SEU-06=差距过大（实际 ${tier('SEU-06')}）`);
+  assert(!groups.some((g) => g.candidates.some((c) => c.id === 'SEU-06')), 'SEU-06 不混入主推荐列表');
+  assert(oorTier('SEU-06') === '差距过大', `SEU-06=差距过大且进入 out_of_reach（实际 ${oorTier('SEU-06')}）`);
 }
 
 // 05 改条件重算 --------------------------------------------------------------
