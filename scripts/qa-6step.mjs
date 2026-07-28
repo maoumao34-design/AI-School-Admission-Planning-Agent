@@ -2,6 +2,10 @@
 /**
  * QA 6 步回归脚本（黑盒，驱动真实 HTTP 路由）。
  *
+ * 数据源：直接读 data/sample-jiangsu-2026-phys.json + data/rules.example.json
+ *   ——与线上/运行时(adapter)同一份 canonical 数据，避免 tests/fixtures 副本漂移。
+ *   （tests/fixtures 副本仅供 vitest e2e-dataset 单测；黑盒回归须与部署一致。）
+ *
  * 用法：
  *   1) 终端 A：npm run dev            （启动唯一服务：Next.js，暴露 /api/*）
  *   2) 终端 B：npm run qa             （本脚本，默认打 http://localhost:3000）
@@ -12,6 +16,7 @@
  *   03 资格校验   → POST /api/eligibility
  *   04 方案比较   → POST /api/compare
  *   05 改条件重算 → POST /api/recompute
+ *   + 选科维度   → 物理+生物 考生只命中「物理(再选不限)」组，验证 per-card subject_requirement
  *
  * 退出码：全过=0，有失败=1。便于 CI / QA 断言。
  */
@@ -23,8 +28,9 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:3000';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 
-const sample = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/sample-jiangsu-2026-phys.json'), 'utf8'));
-const rulesFile = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/rules.example.json'), 'utf8'));
+// ★ 黑盒回归与运行时同源：读 data/（部署时 adapter 也读 data/），不再读 tests/fixtures 副本
+const sample = JSON.parse(readFileSync(resolve(root, 'data/sample-jiangsu-2026-phys.json'), 'utf8'));
+const rulesFile = JSON.parse(readFileSync(resolve(root, 'data/rules.example.json'), 'utf8'));
 const rules = Array.isArray(rulesFile) ? rulesFile : rulesFile.rules;
 
 // 01 对话建立条件（这里直接取样本考生上下文；线上由 LLM 从自然语言抽取）
@@ -43,24 +49,41 @@ async function post(path, body) {
 }
 
 console.log(`QA 6 步回归 · 目标服务 ${BASE}（端到端只跑一个服务）`);
+console.log(`数据源 data/sample（${candidates.length} 卡，与运行时同源）`);
 
 // 03 资格校验 ----------------------------------------------------------------
-step('03', '资格校验 POST /api/eligibility（4 类规则真判定）');
+step('03', '资格校验 POST /api/eligibility（4 类规则真判定 · 8 卡全样）');
 {
   const { status, json } = await post('/api/eligibility', { candidate, candidates, rules });
   assert(status === 200, `HTTP 200（实际 ${status}）`);
-  assert(json.outcome?.status === 'ok', `outcome=ok（实际 ${json.outcome?.status}）`);
+  // 样本含待抽取字段(tuition/plan=null)→outcome=needs_manual_review；规则仍真判定。两种"成功"状态都接受。
+  assert(json.outcome?.status === 'ok' || json.outcome?.status === 'needs_manual_review',
+    `outcome 为 ok/needs_manual_review（实际 ${json.outcome?.status}）`);
   const passed = (json.data ?? []).filter((r) => r.passed);
-  assert(passed.length === 4, `4 个候选通过资格（实际 ${passed.length}）`);
-  // 真实规则调用：batch/tuition_le/plan_gt 不落 default
-  const sample0 = (json.data ?? [])[0];
+  assert(passed.length === candidates.length, `${candidates.length} 个候选全通过资格（实际 ${passed.length}）`);
+  // 真实规则调用：首卡(SEU-06，字段齐全) batch/tuition_le/plan_gt 不落 default
+  const sample0 = (json.data ?? []).find((r) => r.candidate_id === 'SEU-06');
   const blockingCount = sample0?.evaluated_rules?.filter((e) => e.blocking)?.length ?? 0;
-  assert(blockingCount === 4, `4 条规则均为真资格门(blocking)（实际 ${blockingCount}）`);
+  assert(blockingCount === 4, `SEU-06 四类规则均为真资格门 blocking（实际 ${blockingCount}）`);
   assert(json.trace?.rules_applied?.length === 4, `trace 记录 4 条规则（实际 ${json.trace?.rules_applied?.length}）`);
 }
 
+// 选科维度（per-card subject_requirement 黑盒覆盖）--------------------------
+step('03b', '选科维度：物理+生物考生 → 只命中「物理(再选不限)」组（SEU-07）');
+{
+  const bioCandidate = { ...candidate, subject: { category: '物理类', primary: '物理', secondary: ['生物'] } };
+  const { status, json } = await post('/api/eligibility', { candidate: bioCandidate, candidates, rules });
+  assert(status === 200, `HTTP 200（实际 ${status}）`);
+  const passed = (json.data ?? []).filter((r) => r.passed);
+  assert(passed.length === 1, `仅 1 个候选通过（未选化学，只 物理-不限 组可报；实际 ${passed.length}）`);
+  assert(passed[0]?.candidate_id === 'SEU-07', `通过的是 SEU-07（物理+不限），实际 ${passed[0]?.candidate_id}`);
+  const chemFailed = ['SEU-06', 'SEU-08', 'NJUST-03', 'HHU-05', 'NJU-07', 'NJU-09', 'NJUPT-05']
+    .every((id) => !(json.data ?? []).find((r) => r.candidate_id === id)?.passed);
+  assert(chemFailed, '7 个 物理+化学 组全部因缺化学被过滤（per-card subject 生效）');
+}
+
 // 04 方案比较 ----------------------------------------------------------------
-step('04', '方案比较 POST /api/compare');
+step('04', '方案比较 POST /api/compare（含差距过大分离 out_of_reach）');
 {
   const { status, json } = await post('/api/compare', { candidate, candidates, rules });
   assert(status === 200, `HTTP 200（实际 ${status}）`);
@@ -72,8 +95,13 @@ step('04', '方案比较 POST /api/compare');
   assert(tier('SEU-08') === '稳妥', `SEU-08=稳妥（实际 ${tier('SEU-08')}）`);
   assert(tier('NJUST-03') === '保底', `NJUST-03=保底（实际 ${tier('NJUST-03')}）`);
   assert(tier('HHU-05') === '保底', `HHU-05=保底（实际 ${tier('HHU-05')}）`);
-  assert(!groups.some((g) => g.candidates.some((c) => c.id === 'SEU-06')), 'SEU-06 不混入主推荐列表');
-  assert(oorTier('SEU-06') === '差距过大', `SEU-06=差距过大且进入 out_of_reach（实际 ${oorTier('SEU-06')}）`);
+  // 扩样覆盖：3 个差距过大组(SEU-06/NJU-07/SEU-07)进 out_of_reach，不混入主推荐
+  const oorIds = outOfReach.map((c) => c.id);
+  assert(['SEU-06', 'NJU-07', 'SEU-07'].every((id) => oorIds.includes(id)),
+    `out_of_reach 含 SEU-06/NJU-07/SEU-07 三差距过大组（实际 ${oorIds.join('/') || '空'}）`);
+  assert(oorTier('SEU-06') === '差距过大', `SEU-06=差距过大（实际 ${oorTier('SEU-06')}）`);
+  assert(!groups.some((g) => g.candidates.some((c) => ['SEU-06', 'NJU-07', 'SEU-07'].includes(c.id))),
+    '差距过大组不混入主推荐列表');
 }
 
 // 05 改条件重算 --------------------------------------------------------------
