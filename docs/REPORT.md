@@ -3,7 +3,7 @@
 > **方向 05 · 决策型 Agent**。本报告对应 [DELIVERY-STANDARD.md](../DELIVERY-STANDARD.md)「个人/小组报告」七项 + [TASK-SPEC.md](../TASK-SPEC.md) §7 要求。
 >
 > - 🌐 **Live（交付物 1）**：<https://ai-school-admission-planning-agent.vercel.app/>
-> - 📦 **源码（交付物 2）**：[GitHub 仓库](https://github.com/maoumao34-design/AI-School-Admission-Planning-Agent)，`main` = `eed595f`
+> - 📦 **源码（交付物 2）**：[GitHub 仓库](https://github.com/maoumao34-design/AI-School-Admission-Planning-Agent)，`main` = `687406d`
 > - 👤 **完成方式**：本项目为**单人（maozh2）**完成，"成员分工"由人 + 6 个智能体（升学规划PM / AI工程师 / 全栈 / 数据 / QA / 群管理）协作分工共同填写（见 §10）。
 
 ---
@@ -13,8 +13,8 @@
 | 项 | 结论 |
 |---|---|
 | **做了什么** | 一个面向高考志愿的**决策型 Agent**：输入考生条件 → 资格校验 → 候选/方案比较 → 改条件重算 → 导出带官方来源的行动方案。范围 = 江苏 2026 物理类。 |
-| **三交付物状态** | ① 可访问网页 = vercel.app（已部署、全球可访问）✅ ② 完整源码 + README = `main`（`eed595f`）✅ ③ 本报告 ✅ |
-| **完成程度** | **决策核心（资格/比较/重算/概率/导出/官方来源）已真实实现并运行**；**候选随动已修复并实测**（改分/改选科→候选**集合**变化）；multi-profile UI 已入（隔离验收待凭证）；后端「再选不超过 2」拦截已实现、待复核合并。LLM 自然语言对话建条件为**后置增强项（已标注、未作为已实现）**。 |
+| **三交付物状态** | ① 可访问网页 = vercel.app（已部署、全球可访问）✅ ② 完整源码 + README = `main`（`687406d`）✅ ③ 本报告 ✅ |
+| **完成程度** | **决策核心（资格/比较/重算/概率/导出/官方来源）已真实实现并运行**；**候选随动已修复并实测**（改分/改选科→候选**集合**变化）；multi-profile UI 已入（隔离验收待凭证）；后端「再选不超过 2」拦截已合 main（`a3ff51d`）。LLM 自然语言对话建条件为**后置增强项（已标注、未作为已实现）**。 |
 | **灵魂** | 可解释、可调整、**不承诺录取**（概率只标注方法 + 数据年份，非预测）。 |
 
 ---
@@ -122,7 +122,7 @@
 - **概率 + 候选随动**：位次差法确定性算术——**换分数/位次/选科，候选集合随之变化**（QA 实测：rank 800→12000 主候选 8→1；化学→生物 主候选 5→空；**非写死**）。
 - **差距过大分离**：`rank_diff > +1500` 进 `out_of_reach`「不推荐」折叠组（透明、不丢）。
 - **multi-profile UI**：登录/注册 + 多考生档案增删/切换/隔离展示（`ProfilePanel`，合 `3ff4923`）。
-- **再选≤2**：前端 `ConditionForm` 拦截已就位（合 `119cd86`）；后端拦截进行中（见 §8）。
+- **再选≤2**：前端 `ConditionForm` 拦截已就位（合 `119cd86`）；后端已合 main `a3ff51d`（见 §8）。
 - **官方来源入口**：每张候选卡可打开官方链接并查看更新时间。
 - **6 步端到端**：API 调真引擎，非 mock / 非录像；**确认导出**生成带来源的 Markdown 行动方案。
 
@@ -136,7 +136,7 @@
 
 - **LLM 自然语言对话建条件**：当前为结构化表单（`ConditionForm`）；自然语言对话 + LLM 编排待 AI 工程师接入（需 LLM key）。
 - **Supabase 登录 / 多账户隔离 / RLS**：**部分实现**——数据模型 + RLS + Auth 基座 + multi-profile UI 已渲染；**隔离验收待凭证**（Supabase anon+service_role key 直打验 RLS，或真人浏览器验跨账号/跨档案不串）。
-- **后端「再选不超过 2」拦截**：AI工程师已实现（`ai-eng/secondary-max2-backend` `efc2ceb`，handlers 层 `secondary>2→info_insufficient`，npm test 53/53），待群管复核合 main；PM 定范围 = 输入校验、不动 per-card 候选集。
+- **后端「再选不超过 2」拦截**：已合 main `a3ff51d`（AI工程师 `ai-eng/secondary-max2-backend` `efc2ceb`，handlers 层 `secondary>2→info_insufficient`，npm test 53/53）；PM 定范围 = 输入校验、不动 per-card 候选集。
 - **手机端真机视觉**未单独跑（响应式 Tailwind 已实现，主页面无明显错位；如实标注，不构成缺陷）。
 
 ### 受限原因与后续计划
@@ -179,7 +179,7 @@
 | **基本稳定可用** | 异常有提示；登录隔离为后置项（不在本次部署范围） |
 | **可运行可交付** | README 写明启动/部署/已完成范围；模拟功能已标注 ✅ |
 
-**三交付物**：① vercel.app（全球可访问，国内可达性按范围决策不做，见 §8）② 源码 + README（`main` `eed595f`）③ 本报告。
+**三交付物**：① vercel.app（全球可访问，国内可达性按范围决策不做，见 §8）② 源码 + README（`main` `687406d`）③ 本报告。
 
 > **最终验收待办**：maozh2 明天做真人验收——线上 6 步（重点 改分/改选科→候选集真变 + 再选≤2 拦截生效）+ multi-profile 隔离（给 QA Supabase 凭证或自验）；核心本地等价回归已全绿。
 
@@ -223,7 +223,7 @@
 
 ### 10.3 全栈开发工程师
 - **已实现**：数据模型 + RLS + Auth 基座（`prisma/schema.prisma`：Account→Profile→Plan→Version）；前端骨架 + 候选卡（MAO-13）；红线补全——建条件表单 / 改条件随动 / 确认导出 Markdown（MAO-18，合 `58aa00e`）；compare 新契约 `groups/out_of_reach` 联调 + 「不推荐（差距过大）」折叠；multi-profile UI（`ProfilePanel` 登录/注册/多考生档案增删/切换/隔离展示，合 `3ff4923`）；再选≤2 前端拦截（`ConditionForm`，合 `119cd86`）；部署 vercel.app（MAO-17）；README 交付物 2（MAO-20）。
-- **部分实现**：multi-profile 隔离验收待 Supabase 凭证 / 真人浏览器（UI 已渲染）；后端「再选不超过 2」拦截已实现（AI工程师 `efc2ceb`）、待群管合 main。
+- **部分实现**：multi-profile 隔离验收待 Supabase 凭证 / 真人浏览器（UI 已渲染）；后端「再选不超过 2」拦截已合 main `a3ff51d`（AI工程师 `efc2ceb`）。
 - **未实现**：手机端真机视觉单独跑。
 - **过程教训**：一次 UI 块自查自合 `main`（`3ff4923`，未走 PR）；已纠正，后续一律 PR + 群管理复核再进 main。
 
@@ -238,7 +238,7 @@
 - **未实现**：multi-profile 隔离验收（待 Supabase anon+service_role 凭证直打 RLS）。
 
 ### 10.6 群管理（整体协调）
-- **已实现**：整体协调主导——审（对照可验收规格核验，独立跑 typecheck / vitest / build / qa）、派（带验收标准的 issue 派活）、催（每小时巡检）、合并 / 去重（收口早期 issue 重复风暴）；MAO-21 umbrella（候选随动 + multi-profile 收口）；issue 回退流程（验收发现缺陷 → 对应 done issue 回退 in_progress → 派人修 → QA 复测）；本轮 main 推进到 `eed595f` 双绿独立验证。
+- **已实现**：整体协调主导——审（对照可验收规格核验，独立跑 typecheck / vitest / build / qa）、派（带验收标准的 issue 派活）、催（每小时巡检）、合并 / 去重（收口早期 issue 重复风暴）；MAO-21 umbrella（候选随动 + multi-profile 收口）；issue 回退流程（验收发现缺陷 → 对应 done issue 回退 in_progress → 派人修 → QA 复测）；本轮 main 推进到 `687406d`（候选随动 + multi-profile + 后端拦截 + 报告收口）双绿独立验证。
 - **边界**：协调与验收，不下场实现产品代码。
 
 ---
@@ -248,7 +248,7 @@
 | 交付物 | 位置 / commit |
 |---|---|
 | ① 可访问网页 | <https://ai-school-admission-planning-agent.vercel.app/>（MAO-17） |
-| ② 源码 + README | `main` = `eed595f`（MAO-20 README + 本轮候选随动/multi-profile 收口） |
+| ② 源码 + README | `main` = `687406d`（README + 候选随动 / multi-profile / 后端拦截 / 报告收口） |
 | ③ 报告 | `docs/REPORT.md`（本文件，`pm/report-v1`） |
 
-**关键 commit**：PRD `c1f8dcb` · 数据 `0061af0`（+ 契约对齐 `fff0a87` + 扩样 `186bb6f`）· AI 引擎 PR#3 `16e8c1e`（compare/eligibility per-card 选科）· 全栈前端 `4adebcf` · 部署修复 `95e2552` · 红线补全 `58aa00e` · multi-profile UI + out_of_reach `3ff4923` · 再选≤2 `119cd86` · README `bc4ec6e` · qa-6step 同源 `eed595f`。
+**关键 commit**：PRD `c1f8dcb` · 数据 `0061af0`（+ 契约对齐 `fff0a87` + 扩样 `186bb6f`）· AI 引擎 PR#3 `16e8c1e`（compare/eligibility per-card 选科）· 全栈前端 `4adebcf` · 部署修复 `95e2552` · 红线补全 `58aa00e` · multi-profile UI + out_of_reach `3ff4923` · 再选≤2 `119cd86` · README `bc4ec6e` · qa-6step 同源 `eed595f` · 后端拦截 `a3ff51d` · 报告 `687406d`。
