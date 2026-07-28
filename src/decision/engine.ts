@@ -54,6 +54,9 @@ export const TIER_THRESHOLDS = {
 export const DEFAULT_DATA_YEARS = '2023-2025'; // 数据「正式交付」含近3年
 export const PROB_METHOD = '近3年位次差法';
 
+/** 再选科目上限（江苏 3+1+2：再选 2 门）。用于后端/API 兑底拦截，防绕过前端的脏请求。 */
+export const SECONDARY_MAX = 2;
+
 // ============================================================================
 // 1. 单条规则判定（按 machine.type 分派；数据待抽取/无法判定 → 不阻断 + caveat）
 // ============================================================================
@@ -493,9 +496,21 @@ export function findMissingConditions(candidate: Partial<CandidateConditions> | 
   if (candidate.subject && (!candidate.subject.primary || !Array.isArray(candidate.subject.secondary))) {
     missing.push('选科(首选/再选)');
   }
-  // 注：再选正好2门是江苏3+1+2规则，由前端表单强制(全栈)；引擎不硬拦计数，
-  // 避免样本/历史 candidate(secondary≠2) 整个被 info_insufficient 阻断。subject_match 照常按实际选科过滤。
   return missing;
+}
+
+/**
+ * 条件「值校验」（非缺失）：再选科目数超上限(>SECONDARY_MAX) → 返回错误信息。
+ * 只拦超限、不拦不足/不等于：避免样本或历史 candidate(secondary≠2) 被 info_insufficient 阻断，
+ * 不破坏候选随动；subject_match 仍按各卡 subject_requirement 逐卡过滤。
+ * 后端/API 兑底用：防绕过前端表单的脏请求(secondary>2) 进入决策引擎。
+ */
+export function findConditionErrors(candidate: Partial<CandidateConditions> | undefined): string[] {
+  if (!candidate?.subject || !Array.isArray(candidate.subject.secondary)) return [];
+  if (candidate.subject.secondary.length > SECONDARY_MAX) {
+    return [`再选科目最多 ${SECONDARY_MAX} 门，当前 ${candidate.subject.secondary.length} 门（请去掉超出的科目）`];
+  }
+  return [];
 }
 
 export function buildTrace(
