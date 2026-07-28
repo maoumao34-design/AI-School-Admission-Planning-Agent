@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyChanges,
   checkEligibility,
+  compareFiltered,
   evaluateRule,
   findMissingConditions,
   probabilityRef,
@@ -287,5 +288,40 @@ describe('conditions validation', () => {
     expect(merged.score).toBe(700);
     expect(merged.preferences!.region).toEqual(['南京']);
     expect(merged.preferences!.schoolLevel).toEqual(['985']);
+  });
+});
+
+// ===========================================================================
+// compareFiltered · 资格过滤 + 差距过大分离（红线修复：换分/换选科→候选集随之变）
+// ===========================================================================
+describe('compareFiltered · 资格过滤 + 差距过大分离', () => {
+  const cards: CandidateCard[] = [
+    makeCard({ id: 'A-chem', major_group: { group_no: '01', subject_requirement: '物理+化学' }, history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] }),
+    makeCard({ id: 'C-reach', major_group: { group_no: '03', subject_requirement: '物理+化学' }, history: [{ year: 2024, plan: 10, min_score: 700, min_rank: 2000 }] }),
+  ];
+  const rules: Rule[] = [subjRule()]; // required 物理+化学
+  const candWithChem = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['化学'] } });
+  const candNoChem = candidate({ subject: { category: '物理类', primary: '物理', secondary: ['生物'] } });
+
+  it('带 rules + 考生齐 required(物理+化学) → 候选保留', () => {
+    const res = compareFiltered(candWithChem, cards, rules);
+    expect(res.groups[0].candidates.map((c) => c.id)).toContain('A-chem');
+  });
+
+  it('带 rules + 考生缺 required(无化学) → 被 subject_match 过滤掉', () => {
+    const res = compareFiltered(candNoChem, cards, rules);
+    expect(res.groups[0].candidates.map((c) => c.id)).not.toContain('A-chem');
+  });
+
+  it('无 rules → 不过滤(都保留在主列表，除差距过大)', () => {
+    const res = compareFiltered(candWithChem, cards, undefined);
+    expect(res.groups[0].candidates.map((c) => c.id)).toContain('A-chem');
+  });
+
+  it('差距过大(rank_diff>+1500)移出主列表、入 out_of_reach', () => {
+    const res = compareFiltered(candWithChem, cards, rules);
+    const mainIds = res.groups.flatMap((g) => g.candidates.map((c) => c.id));
+    expect(mainIds).not.toContain('C-reach'); // 5200-2000=+3200 → 差距过大
+    expect(res.out_of_reach.map((c) => c.id)).toContain('C-reach');
   });
 });

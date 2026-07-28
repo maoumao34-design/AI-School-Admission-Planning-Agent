@@ -16,6 +16,7 @@
 import type {
   CandidateCard,
   CandidateConditions,
+  ComparisonResult,
   Dataset,
   DecisionResponse,
   DecisionTrace,
@@ -269,6 +270,48 @@ export function compare(
   }));
 }
 
+/**
+ * 方案比较（带资格过滤 + 差距过大分离）——修补「换分/换选科候选集不变」红线。
+ *  1) 若传入 rules：先过 checkEligibility(含 subject_match) → 只留资格通过的候选；
+ *  2) 每策略排序；tier=差距过大(rank_diff>+1500) 的移出主列表、单独入 out_of_reach（保留透明度）。
+ * tier 只依赖 rank_diff（与策略无关），故 out_of_reach 取首策略排序去重即可。
+ */
+export function compareFiltered(
+  candidate: CandidateConditions,
+  candidates: CandidateCard[],
+  rules: Rule[] | undefined,
+  strategies: Strategy[] = ['院校优先', '专业优先'],
+  dataYears: string = DEFAULT_DATA_YEARS,
+): ComparisonResult {
+  const eligible: CandidateCard[] =
+    rules && rules.length
+      ? candidates.filter((c) =>
+          checkEligibility({ candidate, candidates: [c], rules }).some((r) => r.passed),
+        )
+      : candidates;
+
+  const rankedByStrategy = strategies.map((s) => ({
+    strategy: s,
+    candidates: rankCandidates(eligible, candidate, s, dataYears),
+  }));
+
+  const groups: StrategyGroup[] = rankedByStrategy.map((g) => ({
+    strategy: g.strategy,
+    candidates: g.candidates.filter((c) => c.probability_ref.tier !== '差距过大'),
+  }));
+
+  // 差距过大：tier 不随策略变，取首策略排序结果过滤即可（去重）
+  const outOfReach =
+    (rankedByStrategy[0]?.candidates ?? []).filter(
+      (c) => c.probability_ref.tier === '差距过大',
+    ) ?? [];
+
+  return {
+    groups,
+    out_of_reach: outOfReach,
+  };
+}
+
 function buildReason(card: CandidateCard, diff: number, tier: ProbabilityTier): string {
   if (!Number.isFinite(diff)) {
     return `${card.school.name} ${card.major_group.group_no}组：缺历史位次数据，概率档为保守估计（${PROB_METHOD}），需补近3年数据。`;
@@ -383,6 +426,8 @@ export function findMissingConditions(candidate: Partial<CandidateConditions> | 
   if (candidate.subject && (!candidate.subject.primary || !Array.isArray(candidate.subject.secondary))) {
     missing.push('选科(首选/再选)');
   }
+  // 注：再选正好2门是江苏3+1+2规则，由前端表单强制(全栈)；引擎不硬拦计数，
+  // 避免样本/历史 candidate(secondary≠2) 整个被 info_insufficient 阻断。subject_match 照常按实际选科过滤。
   return missing;
 }
 
