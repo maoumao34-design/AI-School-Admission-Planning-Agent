@@ -2,7 +2,7 @@
   "_meta": {
     "scope": "江苏 · 2026 · 物理类（示例考生：637 分 / 位次 5,200 / 选考 物理+化学）",
     "schema_aligned_to": "src/decision/types.ts (ai-eng/api-contract) — CandidateCard / Rule，引擎可直接加载本文件消费",
-    "data_status": "sample — 投档最低分(min_score)取自 jseea.cn 官方投档线(权威、各源一致)；最低位次(min_rank)由一分一段表派生(各聚合站有约±300位出入，已标 status=待官方复核)；本组精确计划数待《江苏招生计划》汇编抽取 | 2026-07-28 扩样：新增 NJU-07(冲刺)/NJU-09(稳妥)/NJUPT-05(保底) 三卡，候选池位次带从~2500-11000 扩到 ~1600-27000，使改分数时候选集可随动（仍需引擎过滤差距过大卡）",
+    "data_status": "sample — 投档最低分(min_score)取自 jseea.cn 官方投档线(权威、各源一致)；最低位次(min_rank)由一分一段表派生(各聚合站有约±300位出入，已标 status=待官方复核)；本组精确计划数待《江苏招生计划》汇编抽取 | 2026-07-28 扩样：新增 NJU-07(冲刺)/NJU-09(稳妥)/NJUPT-05(保底) 三卡，候选池位次带从~2500-11000 扩到 ~1600-27000，使改分数时候选集可随动（仍需引擎过滤差距过大卡） | 2026-07-28 续：新增 SEU-07(物理+不限)，跨选科扩样起步（演示按选科筛选：未选化学者仍可报本组）",
     "official_sources": {
       "投档线_2025_物理类": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
       "投档线_2024_物理类": "https://www.jseea.cn/webfile/index/index_zkxx/2024-07-18/7219509116052443136.html",
@@ -701,6 +701,104 @@
         "min_rank派生待官方复核",
         "计划数/学费待抽取",
         "保底不等于必录"
+      ]
+    },
+    {
+      "id": "SEU-07",
+      "school": {
+        "name": "东南大学",
+        "code": "1102",
+        "region": "江苏·南京",
+        "level_tags": [
+          "985",
+          "211",
+          "双一流",
+          "公办"
+        ],
+        "batch": "普通类本科批"
+      },
+      "major_group": {
+        "group_no": "07",
+        "subject_requirement": "物理",
+        "subject_requirement_note": "首选物理、再选不限（与06/08组‘物理+化学’不同；用于演示按选科筛选）",
+        "majors": [
+          "文科试验班类",
+          "经济学类",
+          "工商管理类",
+          "法学(文理兼收)"
+        ]
+      },
+      "recruitment": {
+        "plan": null,
+        "plan_granularity": "校·物理类总量(非本组)",
+        "duration": 4,
+        "tuition": null,
+        "tuition_note": "待抽取(文理兼收类约5200-5500)"
+      },
+      "history": [
+        {
+          "year": 2023,
+          "plan": null,
+          "min_score": null,
+          "min_rank": null,
+          "rank_diff": null,
+          "source": {
+            "url": "https://www.jseea.cn/webfile/index/index_zkxx/2023-07-18/7086888854866628608.html",
+            "publisher": "江苏省教育考试院",
+            "updated": "2023-07-18",
+            "status": "待官方复核",
+            "rank_via": "一分一段表派生"
+          }
+        },
+        {
+          "year": 2024,
+          "plan": null,
+          "min_score": 656,
+          "min_rank": 3228,
+          "rank_diff": 1972,
+          "source": {
+            "url": "https://www.jseea.cn/webfile/index/index_zkxx/2024-07-18/7219509116052443136.html",
+            "publisher": "江苏省教育考试院",
+            "updated": "2024-07-18",
+            "status": "待官方复核",
+            "rank_via": "一分一段表派生"
+          }
+        },
+        {
+          "year": 2025,
+          "plan": null,
+          "min_score": 654,
+          "min_rank": 3281,
+          "rank_diff": 1919,
+          "source": {
+            "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+            "publisher": "江苏省教育考试院",
+            "updated": "2025-07-18",
+            "status": "待官方复核",
+            "rank_via": "一分一段表派生"
+          }
+        }
+      ],
+      "rank_diff_vs_candidate": 1919,
+      "probability_ref": {
+        "tier": "冲刺",
+        "pct_ref_band": "<40%",
+        "method": "近3年位次差法",
+        "data_years": "2024-2025"
+      },
+      "reason": "该组再选‘不限’(首选物理即可，任选再选)；考生5200低于其2025投档位次(3281)约1919名，差距过大(>1500)，属激进冲刺。用于演示：选物理但未选化学的考生仍可报本组(而06/08组要求化学会被过滤)。",
+      "source": {
+        "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf",
+        "publisher": "江苏省教育考试院",
+        "updated": "2025-07-18",
+        "status": "待官方复核",
+        "rank_via": "一分一段表派生"
+      },
+      "caveats": [
+        "选科要求=首选物理、再选不限(数据记为‘物理’)——与06/08组‘物理+化学’不同，是跨选科扩样的样本",
+        "rank_diff>+1500，差距过大的激进冲刺，仅供参考非录取承诺",
+        "2023数据待补；min_rank派生待官方复核",
+        "计划数/学费待抽取"
       ]
     }
   ]
