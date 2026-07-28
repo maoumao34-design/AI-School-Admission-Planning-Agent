@@ -4,7 +4,7 @@
     "schema_aligned_to": "src/decision/types.ts (ai-eng/api-contract) — Rule.machine{type, params}；引擎 evaluateRule() 按 type 分派",
     "engine_rule_types": "subject_match(params.required[]) / batch(params.allowed[]) / tuition_le(params.max) / plan_gt(params.min)",
     "coverage": "4 条覆盖 选科/批次/费用/计划 全部四类（验收要求‘至少选科与批次’已超额）；逐条附官方来源 + 适用周期",
-    "note": "规则=文本规则→可机读判据。本样本所有专业组选科均为‘物理+化学’，故选科规则 params.required=[物理,化学] 全局适用；异质数据集需按各专业组 subject_requirement 生成组级规则。"
+    "note": "规则=文本规则→可机读判据。选科采用 per-card 判定：引擎 cardSubjectOk() 按每张候选卡自己的 major_group.subject_requirement 逐卡判（按『+』拆：首段=首选、其余=再选必选；只写『物理』或含『不限』=再选不限），compare/eligibility 均不再套全局 subject_match 规则。本样本现含两类选科：东南06/08、南理工03、河海05=『物理+化学』；东南07=『物理』(再选不限，跨选科扩样)。下方 SUBJ-REQ-2024-001 的全局 subject_match 规则仅作多数组共性的事实描述与兜底，逐卡过滤以各卡 subject_requirement 为准。"
   },
   "rules": [
     {
