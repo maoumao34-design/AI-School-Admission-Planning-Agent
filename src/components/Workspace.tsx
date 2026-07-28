@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type {
   CandidateCard as CandidateCardDTO,
   CandidateConditions,
+  ComparisonResult,
   DecisionResponse,
   EligibilityResult,
+  RankedCandidate,
   Rule,
   Strategy,
   StrategyGroup,
@@ -15,6 +17,7 @@ import sample from "../../data/sample-jiangsu-2026-phys.json";
 import rulesData from "../../data/rules.example.json";
 import CandidateCard from "./CandidateCard";
 import ConditionForm from "./ConditionForm";
+import ProfilePanel, { type PlannerProfile } from "./ProfilePanel";
 
 type Status = "loading" | "error" | "ready";
 type StrategyKey = Extract<Strategy, "院校优先" | "专业优先">;
@@ -29,20 +32,33 @@ const RULES = (rulesData.rules ?? []) as unknown as Rule[];
 export default function Workspace() {
   const [candidate, setCandidate] = useState<CandidateConditions>(INITIAL_CANDIDATE);
   const [strategy, setStrategy] = useState<StrategyKey>("院校优先");
+  const [activeProfileId, setActiveProfileId] = useState("");
+  const [profiles, setProfiles] = useState<PlannerProfile[]>([]);
 
   const [status, setStatus] = useState<Status>("loading");
   const [errMsg, setErrMsg] = useState("");
-  const [compare, setCompare] = useState<DecisionResponse<StrategyGroup[]> | null>(null);
+  const [compare, setCompare] = useState<DecisionResponse<ComparisonResult> | null>(null);
   const [elig, setElig] = useState<DecisionResponse<EligibilityResult[]> | null>(null);
+
+  const handleActiveProfileChange = useCallback((profile: PlannerProfile) => {
+    setActiveProfileId(profile.id);
+    setCandidate(profile.conditions);
+  }, []);
+
+  const handleProfilesChange = useCallback((next: PlannerProfile[], nextActiveId: string) => {
+    setProfiles(next);
+    if (!activeProfileId && nextActiveId) setActiveProfileId(nextActiveId);
+  }, [activeProfileId]);
 
   // 改条件 / 改策略 → 重调真引擎（debounce）
   useEffect(() => {
     const id = setTimeout(() => {
       setStatus("loading");
-      const body = { candidate, candidates: CANDIDATES, strategies: [strategy] };
+      setErrMsg("");
+      const body = { candidate, candidates: CANDIDATES, rules: RULES, strategies: [strategy] };
       const eligBody = { candidate, candidates: CANDIDATES, rules: RULES };
       Promise.all([
-        fetch("/api/compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<DecisionResponse<StrategyGroup[]>>),
+        fetch("/api/compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<DecisionResponse<ComparisonResult>>),
         fetch("/api/eligibility", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(eligBody) }).then((r) => r.json() as Promise<DecisionResponse<EligibilityResult[]>>),
       ])
         .then(([c, e]) => {
@@ -58,15 +74,24 @@ export default function Workspace() {
     return () => clearTimeout(id);
   }, [candidate, strategy]);
 
-  const group = compare?.data?.[0];
+  const group = compare?.data?.groups.find((g) => g.strategy === strategy) ?? compare?.data?.groups[0];
+  const outOfReach = compare?.data?.out_of_reach ?? [];
   const eligResults = elig?.data ?? [];
   const eligPassed = eligResults.filter((r) => r.passed).length;
 
   return (
-    <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-      {/* 左：建条件（步骤 01） */}
-      <div className="min-h-[320px] lg:min-h-0">
-        <ConditionForm value={candidate} onChange={setCandidate} />
+    <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+      {/* 左：登录/多档案 + 建条件（步骤 01） */}
+      <div className="flex min-h-[320px] flex-col gap-3 lg:min-h-0">
+        <ProfilePanel
+          candidate={candidate}
+          activeProfileId={activeProfileId}
+          onActiveProfileChange={handleActiveProfileChange}
+          onProfilesChange={handleProfilesChange}
+        />
+        <div className="min-h-[360px] flex-1">
+          <ConditionForm value={candidate} onChange={setCandidate} />
+        </div>
       </div>
 
       {/* 右：资格过滤 → 方案比较 → 确认导出 */}
@@ -85,9 +110,12 @@ export default function Workspace() {
               {s}
             </button>
           ))}
+          <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
+            当前档案：{profiles.find((p) => p.id === activeProfileId)?.name ?? "未命名"}
+          </span>
           <button
             type="button"
-            onClick={() => exportReport(candidate, strategy, group, eligPassed, eligResults.length, compare?.trace)}
+            onClick={() => exportReport(candidate, strategy, group, outOfReach, eligPassed, eligResults.length, compare?.trace)}
             className="ml-auto rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
             disabled={!group || group.candidates.length === 0}
             title="确认方案并导出（步骤 06）"
@@ -109,7 +137,7 @@ export default function Workspace() {
           </div>
         )}
         {status === "ready" && compare && (
-          <ReadyView compare={compare} group={group} eligPassed={eligPassed} eligTotal={eligResults.length} elig={eligResults} />
+          <ReadyView compare={compare} group={group} outOfReach={outOfReach} eligPassed={eligPassed} eligTotal={eligResults.length} elig={eligResults} />
         )}
       </div>
     </div>
@@ -119,20 +147,22 @@ export default function Workspace() {
 function ReadyView({
   compare,
   group,
+  outOfReach,
   eligPassed,
   eligTotal,
   elig,
 }: {
-  compare: DecisionResponse<StrategyGroup[]>;
+  compare: DecisionResponse<ComparisonResult>;
   group?: StrategyGroup;
+  outOfReach: RankedCandidate[];
   eligPassed: number;
   eligTotal: number;
   elig: EligibilityResult[];
 }) {
   const { outcome, trace } = compare;
 
-  // 异常路径：信息不足 / 无结果 / 需人工复核
-  if (outcome.status !== "ok" || !group || group.candidates.length === 0) {
+  // 异常路径：信息不足 / 无结果 / 需人工复核。差距过大另列，不再误判为主列表候选。
+  if (outcome.status !== "ok" || !group || (group.candidates.length === 0 && outOfReach.length === 0)) {
     return (
       <div className="flex-1 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
         <div className="font-medium">{outcome.status === "info_insufficient" ? "信息不足" : "没有符合的候选"}</div>
@@ -145,11 +175,13 @@ function ReadyView({
   const cu = trace.conditions_used;
 
   return (
-    <div className="flex-1 space-y-4">
+    <div className="flex-1 space-y-4 overflow-y-auto pr-1">
       {/* 步骤 03 资格过滤：X/Y 通过 */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
         <span className="font-medium text-slate-700">资格过滤</span>
         <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">{eligPassed}/{eligTotal} 候选通过硬条件</span>
+        <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">主推荐 {group.candidates.length}</span>
+        <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">不推荐折叠 {outOfReach.length}</span>
         <details className="ml-1">
           <summary className="cursor-pointer text-slate-500">逐条规则</summary>
           <ul className="mt-1 space-y-0.5 text-slate-600">
@@ -164,12 +196,31 @@ function ReadyView({
         </details>
       </div>
 
-      {/* 步骤 04 方案比较：候选卡（引擎按当前策略排好序） */}
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {group.candidates.map((c) => (
-          <CandidateCard key={c.id} card={c} />
-        ))}
-      </div>
+      {/* 步骤 04 方案比较：主候选卡（引擎按当前策略排好序） */}
+      {group.candidates.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {group.candidates.map((c) => (
+            <CandidateCard key={c.id} card={c} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          当前条件下没有可进入主推荐列表的候选；差距过大候选已收起到“不推荐”组。
+        </div>
+      )}
+
+      {outOfReach.length > 0 && (
+        <details className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <summary className="cursor-pointer font-medium text-slate-700">
+            差距过大 · 不推荐（{outOfReach.length} 个，未混入主推荐列表）
+          </summary>
+          <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
+            {outOfReach.map((c) => (
+              <CandidateCard key={c.id} card={c} />
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* 决策 trace（透明化：用了哪些条件 / 数据年份 / 生成时间） */}
       <details className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
@@ -184,7 +235,7 @@ function ReadyView({
       </details>
 
       <p className="text-[11px] text-slate-400">
-        ⚠ 概率为「{group.candidates[0]?.probability_ref.method ?? "近3年位次差法"}」参考，非录取预测；最终以官方录取结果为准。
+        ⚠ 概率为「{group.candidates[0]?.probability_ref.method ?? outOfReach[0]?.probability_ref.method ?? "近3年位次差法"}」参考，非录取预测；最终以官方录取结果为准。
       </p>
     </div>
   );
@@ -195,6 +246,7 @@ function exportReport(
   candidate: CandidateConditions,
   strategy: Strategy,
   group: StrategyGroup | undefined,
+  outOfReach: RankedCandidate[],
   eligPassed: number,
   eligTotal: number,
   trace: DecisionResponse<unknown>["trace"] | undefined,
@@ -216,6 +268,7 @@ function exportReport(
   lines.push("");
   lines.push("## 资格过滤");
   lines.push(`- ${eligPassed}/${eligTotal} 候选通过硬条件规则（选科/批次/费用/计划）`);
+  lines.push(`- 差距过大不推荐候选：${outOfReach.length} 个，未进入主推荐列表`);
   lines.push("");
   lines.push(`## 方案：${strategy}`);
   group.candidates.forEach((c, i) => {
@@ -226,6 +279,11 @@ function exportReport(
     lines.push(`   - 官方来源：${c.source.url} （${c.source.publisher ?? ""}，更新 ${c.source.updated ?? "—"}）`);
     if (c.caveats && c.caveats.length) lines.push(`   - 提示：${c.caveats.join("；")}`);
   });
+  if (outOfReach.length) {
+    lines.push("");
+    lines.push("## 不推荐（差距过大，透明保留）");
+    outOfReach.forEach((c) => lines.push(`- ${c.school.name} ${c.major_group.group_no}组：${c.rank_diff_vs_candidate.toLocaleString()} 位次差，${c.source.url}`));
+  }
   lines.push("");
   lines.push("---");
   lines.push("⚠ 本方案为规划辅助，不承诺录取。最终填报前必须回到官方页面核对。");
