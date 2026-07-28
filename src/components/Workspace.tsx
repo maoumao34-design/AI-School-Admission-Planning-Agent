@@ -1,83 +1,76 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   CandidateCard as CandidateCardDTO,
   CandidateConditions,
   DecisionResponse,
+  EligibilityResult,
+  Rule,
   Strategy,
   StrategyGroup,
 } from "@/decision/types";
-// 真引擎 /api/compare 的请求体 = { candidate, candidates, strategies }（见 docs/API-CONTRACT.md §3）。
-// 候选条件 + 候选卡原始结构来自数据角色交付的样本；概率档/位次差/理由/排序全部由服务端
-// 决策核心(src/decision)重算，前端不自己算——这是「吃真引擎数据」的关键。
+// 数据角色交付的样本 + 规则（引擎消费）；服务端决策核心(src/decision)重算概率/位次差/排序。
 import sample from "../../data/sample-jiangsu-2026-phys.json";
+import rulesData from "../../data/rules.example.json";
 import CandidateCard from "./CandidateCard";
-import ChatPane from "./ChatPane";
+import ConditionForm from "./ConditionForm";
 
-type State =
-  | { kind: "loading" }
-  | { kind: "error"; message: string }
-  | { kind: "ready"; data: DecisionResponse<StrategyGroup[]> };
-
+type Status = "loading" | "error" | "ready";
 type StrategyKey = Extract<Strategy, "院校优先" | "专业优先">;
-
 const STRATEGIES: StrategyKey[] = ["院校优先", "专业优先"];
 
-/** 工作区：POST /api/compare（真引擎）→ 展示策略组候选卡 + 决策 trace + 异常状态。
- *  覆盖 TASK-SPEC §3：加载/成功/失败状态；无结果/异常给原因+下一步；改策略随动重排序。 */
+const INITIAL_CANDIDATE = sample.candidate_context as unknown as CandidateConditions;
+const CANDIDATES = (sample.cards ?? []) as unknown as CandidateCardDTO[];
+const RULES = (rulesData.rules ?? []) as unknown as Rule[];
+
+/** 工作区：建条件(form) → 资格过滤 → 方案比较 → 改条件随动重算 → 确认导出（6 步端到端可演示）。
+ *  全部吃服务端真引擎；条件一改即重算（debounce 300ms）。 */
 export default function Workspace() {
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const [candidate, setCandidate] = useState<CandidateConditions>(INITIAL_CANDIDATE);
   const [strategy, setStrategy] = useState<StrategyKey>("院校优先");
 
-  const candidate = sample.candidate_context as unknown as CandidateConditions;
-  const candidates = (sample.cards ?? []) as unknown as CandidateCardDTO[];
+  const [status, setStatus] = useState<Status>("loading");
+  const [errMsg, setErrMsg] = useState("");
+  const [compare, setCompare] = useState<DecisionResponse<StrategyGroup[]> | null>(null);
+  const [elig, setElig] = useState<DecisionResponse<EligibilityResult[]> | null>(null);
 
-  const buildRequest = useCallback(
-    (): { candidate: CandidateConditions; candidates: CandidateCardDTO[]; strategies: Strategy[] } => ({
-      candidate,
-      candidates,
-      strategies: [strategy],
-    }),
-    [candidate, candidates, strategy],
-  );
-
+  // 改条件 / 改策略 → 重调真引擎（debounce）
   useEffect(() => {
-    let alive = true;
-    setState({ kind: "loading" });
-    fetch("/api/compare", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(buildRequest()),
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as DecisionResponse<StrategyGroup[]>;
-      })
-      .then((data) => {
-        if (alive) setState({ kind: "ready", data });
-      })
-      .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (alive) setState({ kind: "error", message: msg });
-      });
-    return () => {
-      alive = false;
-    };
-  }, [buildRequest]);
+    const id = setTimeout(() => {
+      setStatus("loading");
+      const body = { candidate, candidates: CANDIDATES, strategies: [strategy] };
+      const eligBody = { candidate, candidates: CANDIDATES, rules: RULES };
+      Promise.all([
+        fetch("/api/compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<DecisionResponse<StrategyGroup[]>>),
+        fetch("/api/eligibility", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(eligBody) }).then((r) => r.json() as Promise<DecisionResponse<EligibilityResult[]>>),
+      ])
+        .then(([c, e]) => {
+          setCompare(c);
+          setElig(e);
+          setStatus("ready");
+        })
+        .catch((e: unknown) => {
+          setErrMsg(e instanceof Error ? e.message : String(e));
+          setStatus("error");
+        });
+    }, 300);
+    return () => clearTimeout(id);
+  }, [candidate, strategy]);
 
-  const group = state.kind === "ready" ? state.data.data?.[0] : undefined;
+  const group = compare?.data?.[0];
+  const eligResults = elig?.data ?? [];
+  const eligPassed = eligResults.filter((r) => r.passed).length;
 
   return (
     <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-      {/* 左：对话区 */}
+      {/* 左：建条件（步骤 01） */}
       <div className="min-h-[320px] lg:min-h-0">
-        <ChatPane context={candidate} />
+        <ConditionForm value={candidate} onChange={setCandidate} />
       </div>
 
-      {/* 右：候选 + 比较 */}
+      {/* 右：资格过滤 → 方案比较 → 确认导出 */}
       <div className="flex min-h-0 flex-col">
-        {/* 策略切换：改策略 → 重调真引擎 → 排序随动 */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500">方案策略：</span>
           {STRATEGIES.map((s) => (
@@ -86,52 +79,64 @@ export default function Workspace() {
               type="button"
               onClick={() => setStrategy(s)}
               className={`rounded-md border px-2.5 py-1 text-xs ${
-                strategy === s
-                  ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                strategy === s ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
               }`}
             >
               {s}
             </button>
           ))}
-          <span className="text-[11px] text-slate-400">（切换重调真引擎 /api/compare，按策略重排序）</span>
+          <button
+            type="button"
+            onClick={() => exportReport(candidate, strategy, group, eligPassed, eligResults.length, compare?.trace)}
+            className="ml-auto rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            disabled={!group || group.candidates.length === 0}
+            title="确认方案并导出（步骤 06）"
+          >
+            确认 · 导出方案
+          </button>
         </div>
 
-        {state.kind === "loading" && (
+        {status === "loading" && (
           <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 py-16 text-sm text-slate-400">
-            正在按条件检索候选…
+            正在按条件检索 / 重算…
           </div>
         )}
-
-        {state.kind === "error" && (
+        {status === "error" && (
           <div className="flex-1 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <div className="font-medium">检索失败</div>
-            <div className="mt-1 text-xs">原因：{state.message}</div>
+            <div className="mt-1 text-xs">原因：{errMsg}</div>
             <div className="mt-1 text-xs text-red-500">下一步：稍后重试，或检查数据来源是否可用。</div>
           </div>
         )}
-
-        {state.kind === "ready" && <ReadyView data={state.data} group={group} />}
+        {status === "ready" && compare && (
+          <ReadyView compare={compare} group={group} eligPassed={eligPassed} eligTotal={eligResults.length} elig={eligResults} />
+        )}
       </div>
     </div>
   );
 }
 
 function ReadyView({
-  data,
+  compare,
   group,
+  eligPassed,
+  eligTotal,
+  elig,
 }: {
-  data: DecisionResponse<StrategyGroup[]>;
+  compare: DecisionResponse<StrategyGroup[]>;
   group?: StrategyGroup;
+  eligPassed: number;
+  eligTotal: number;
+  elig: EligibilityResult[];
 }) {
-  const { outcome, trace } = data;
+  const { outcome, trace } = compare;
 
-  // 异常路径：info_insufficient / no_result / needs_manual_review / data_stale ...
+  // 异常路径：信息不足 / 无结果 / 需人工复核
   if (outcome.status !== "ok" || !group || group.candidates.length === 0) {
     return (
       <div className="flex-1 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        <div className="font-medium">没有符合的候选</div>
-        <div className="mt-1 text-xs">{outcome.reason || "当前条件下无匹配院校专业组。"}</div>
+        <div className="font-medium">{outcome.status === "info_insufficient" ? "信息不足" : "没有符合的候选"}</div>
+        <div className="mt-1 text-xs">{outcome.reason}</div>
         {outcome.next_step && <div className="mt-1 text-xs">下一步：{outcome.next_step}</div>}
       </div>
     );
@@ -141,42 +146,98 @@ function ReadyView({
 
   return (
     <div className="flex-1 space-y-4">
-      {/* 决策 trace：用了哪些条件 / 数据年份 / 生成时间（决策透明化） */}
-      <details className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
-        <summary className="cursor-pointer font-medium text-slate-700">
-          决策依据：用了哪些条件 / 数据年份 / 生成时间
-        </summary>
-        <div className="mt-2 space-y-1 text-slate-600">
-          <div>
-            <span className="text-slate-400">条件：</span>
-            {cu.province}·{cu.year} {cu.subject.category}（{cu.subject.primary}+{cu.subject.secondary.join("+")}）
-            分{cu.score}/位次{cu.rank.toLocaleString()}
-          </div>
-          {trace.rules_applied.length > 0 && (
-            <div>
-              <span className="text-slate-400">规则：</span>
-              {trace.rules_applied.join("、")}
-            </div>
-          )}
-          <div>
-            <span className="text-slate-400">数据年份：</span>
-            {trace.dataset_year} · <span className="text-slate-400">生成于</span>{" "}
-            {new Date(trace.generated_at).toLocaleString("zh-CN")}
-          </div>
-          <div className="text-slate-400">（compare 端点不跑资格规则；资格过滤见 /api/eligibility）</div>
-        </div>
-      </details>
+      {/* 步骤 03 资格过滤：X/Y 通过 */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
+        <span className="font-medium text-slate-700">资格过滤</span>
+        <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">{eligPassed}/{eligTotal} 候选通过硬条件</span>
+        <details className="ml-1">
+          <summary className="cursor-pointer text-slate-500">逐条规则</summary>
+          <ul className="mt-1 space-y-0.5 text-slate-600">
+            {elig.map((r) => (
+              <li key={r.candidate_id}>
+                <b>{r.candidate_id}</b>：{r.passed ? "通过" : "未通过"}
+                {r.blocking_rules.length > 0 && `（阻断：${r.blocking_rules.map((b) => b.rule_id).join("、")}）`}
+                {r.advisories.length > 0 && <span className="text-amber-600"> · {r.advisories.join("；")}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
 
-      {/* 候选卡列表（引擎按当前策略排好序） */}
+      {/* 步骤 04 方案比较：候选卡（引擎按当前策略排好序） */}
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {group.candidates.map((c) => (
           <CandidateCard key={c.id} card={c} />
         ))}
       </div>
 
+      {/* 决策 trace（透明化：用了哪些条件 / 数据年份 / 生成时间） */}
+      <details className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
+        <summary className="cursor-pointer font-medium text-slate-700">决策依据：用了哪些条件 / 数据年份 / 生成时间</summary>
+        <div className="mt-2 space-y-1 text-slate-600">
+          <div>
+            <span className="text-slate-400">条件：</span>
+            {cu.province}·{cu.year} {cu.subject.category}（{cu.subject.primary}+{cu.subject.secondary.join("+")}） 分{cu.score}/位次{cu.rank.toLocaleString()}
+          </div>
+          <div><span className="text-slate-400">数据年份：</span>{trace.dataset_year} · 生成于 {new Date(trace.generated_at).toLocaleString("zh-CN")}</div>
+        </div>
+      </details>
+
       <p className="text-[11px] text-slate-400">
         ⚠ 概率为「{group.candidates[0]?.probability_ref.method ?? "近3年位次差法"}」参考，非录取预测；最终以官方录取结果为准。
       </p>
     </div>
   );
+}
+
+// —— 确认导出（步骤 06）：生成 Markdown 行动方案并下载 ——
+function exportReport(
+  candidate: CandidateConditions,
+  strategy: Strategy,
+  group: StrategyGroup | undefined,
+  eligPassed: number,
+  eligTotal: number,
+  trace: DecisionResponse<unknown>["trace"] | undefined,
+) {
+  if (!group) return;
+  const when = new Date().toLocaleString("zh-CN");
+  const lines: string[] = [];
+  lines.push(`# 升学规划方案（${candidate.province} · ${candidate.year}）`);
+  lines.push("");
+  lines.push(`> 生成时间：${when}`);
+  lines.push(`> 数据年份：${trace?.dataset_year ?? "2023-2025"} · 概率方法：近3年位次差法（参考，非录取预测）`);
+  lines.push(`> 三红线：只规划不承诺录取；官方事实/规则判断/AI建议分层；最终以官方页面为准。`);
+  lines.push("");
+  lines.push("## 考生条件");
+  lines.push(`- 省份/年度：${candidate.province} · ${candidate.year}`);
+  lines.push(`- 选科：${candidate.subject.category}（${candidate.subject.primary}+${candidate.subject.secondary.join("+")}）`);
+  lines.push(`- 分数/位次：${candidate.score} / ${candidate.rank.toLocaleString()}`);
+  if (candidate.budget?.maxTuition) lines.push(`- 学费预算上限：¥${candidate.budget.maxTuition}/年`);
+  lines.push("");
+  lines.push("## 资格过滤");
+  lines.push(`- ${eligPassed}/${eligTotal} 候选通过硬条件规则（选科/批次/费用/计划）`);
+  lines.push("");
+  lines.push(`## 方案：${strategy}`);
+  group.candidates.forEach((c, i) => {
+    lines.push(`${i + 1}. **${c.school.name} ${c.major_group.group_no}组**（${c.school.code ?? "—"}）— ${c.probability_ref.tier}（${c.probability_ref.pct_ref_band ?? ""}）`);
+    lines.push(`   - 位次差(考生−校线)：${c.rank_diff_vs_candidate.toLocaleString()}（正=冲、负=稳/保）`);
+    lines.push(`   - 选科：${c.major_group.subject_requirement} · 学制${c.recruitment.duration}年 · 学费¥${c.recruitment.tuition ?? "—"}/年`);
+    lines.push(`   - 理由：${c.reason}`);
+    lines.push(`   - 官方来源：${c.source.url} （${c.source.publisher ?? ""}，更新 ${c.source.updated ?? "—"}）`);
+    if (c.caveats && c.caveats.length) lines.push(`   - 提示：${c.caveats.join("；")}`);
+  });
+  lines.push("");
+  lines.push("---");
+  lines.push("⚠ 本方案为规划辅助，不承诺录取。最终填报前必须回到官方页面核对。");
+  const md = lines.join("\n");
+
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `升学规划方案-${candidate.province}${candidate.year}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
