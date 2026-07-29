@@ -287,6 +287,29 @@ function ReadyView({
         </div>
       </details>
 
+      {/* 计划与版本（§3 功能④）：关键日期 + 风险提醒 + 版本随动 */}
+      <details className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
+        <summary className="cursor-pointer font-medium text-slate-700">计划与版本：关键日期 · 风险提醒 · 版本随动</summary>
+        <div className="mt-2 space-y-2 text-slate-600">
+          <div>
+            <span className="text-slate-400">关键日期（{cu.year} 江苏）：</span>
+            <span>志愿填报 / 录取查询等时间节点<strong>待官方公布</strong>，以江苏省教育考试院为准 · </span>
+            <a href="https://www.jseea.cn/" target="_blank" rel="noreferrer" className="text-indigo-600 underline">jseea.cn</a>
+          </div>
+          <div>
+            <span className="text-slate-400">风险提醒：</span>
+            <ul className="ml-4 list-disc">
+              <li>概率/档位为「{group.candidates[0]?.probability_ref.method ?? outOfReach[0]?.probability_ref.method ?? "近3年位次差法"}」参考，<strong>非录取预测</strong>。</li>
+              <li>部分院校位次(min_rank)待《一分一段表》派生，当前按投档分差兜底分档（{trace.dataset_year}），位次回填后自动切回更精的位次差法。</li>
+              <li>学费/计划/专业清单部分待核，见各卡提示；样本年份与来源见各卡。</li>
+            </ul>
+          </div>
+          <div>
+            <span className="text-slate-400">版本随动：</span>修改任何条件（分数/位次/选科/预算/策略）→ 方案即时重算（步骤 05），确认导出后可对比前后版本。
+          </div>
+        </div>
+      </details>
+
       <p className="text-[11px] text-slate-400">
         ⚠ 概率为「{group.candidates[0]?.probability_ref.method ?? outOfReach[0]?.probability_ref.method ?? "近3年位次差法"}」参考，非录取预测；最终以官方录取结果为准。
       </p>
@@ -337,6 +360,11 @@ function exportReport(
     lines.push("## 不推荐（差距过大，透明保留）");
     outOfReach.forEach((c) => lines.push(`- ${c.school.name} ${c.major_group.group_no}组：${c.rank_diff_vs_candidate.toLocaleString()} 位次差，${c.source.url}`));
   }
+  lines.push("");
+  lines.push("## 计划与版本");
+  lines.push(`- 关键日期（${candidate.year} 江苏）：志愿填报/录取查询等时间节点**待官方公布**，以江苏省教育考试院(jseea.cn)为准。`);
+  lines.push(`- 风险提醒：概率/档位为参考、**非录取预测**；部分院校位次(min_rank)待《一分一段表》派生，当前按投档分差兜底分档(${trace?.dataset_year ?? "2023-2025"})，回填后切回位次差法；学费/计划/专业清单部分待核(见各卡)。`);
+  lines.push(`- 版本随动：修改条件 → 方案即时重算；本导出为当前版本快照。`);
   lines.push("");
   lines.push("---");
   lines.push("⚠ 本方案为规划辅助，不承诺录取。最终填报前必须回到官方页面核对。");
