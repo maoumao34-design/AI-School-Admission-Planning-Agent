@@ -116,6 +116,7 @@ export default function Workspace() {
                   setCandidate(c);
                   profileRef.current?.addProfileFromConditions(c);
                 }}
+                onConditionUpdate={(partial) => profileRef.current?.updateActiveFromConditions(partial)}
               />
             )}
           </div>

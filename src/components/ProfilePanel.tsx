@@ -34,6 +34,23 @@ function makeProfile(name: string, email: string, base: CandidateConditions): Pl
   };
 }
 
+/** 把对话每轮抽到的部分条件深合并进既有完整条件(subject 嵌套合并；未提供字段保留原值)。 */
+function mergeConditions(base: CandidateConditions, partial: Partial<CandidateConditions>): CandidateConditions {
+  return {
+    ...base,
+    ...partial,
+    subject: partial.subject
+      ? {
+          category: partial.subject.category ?? base.subject.category,
+          primary: partial.subject.primary ?? base.subject.primary,
+          secondary: partial.subject.secondary ?? base.subject.secondary,
+        }
+      : base.subject,
+    preferences: partial.preferences ?? base.preferences,
+    budget: partial.budget ?? base.budget,
+  };
+}
+
 function cloneWithName(base: CandidateConditions, index: number): CandidateConditions {
   const rank = Math.max(1, base.rank + index * 900);
   return {
@@ -89,6 +106,8 @@ function fromDbProfile(row: Record<string, unknown>, email: string): PlannerProf
 export interface ProfilePanelHandle {
   /** 由「对话建条件」完成时调用：用抽到的条件新建一个考生档案并切为当前。 */
   addProfileFromConditions: (conditions: CandidateConditions) => void;
+  /** 对话每轮调用：把本轮抽到的部分条件实时合并进当前档案(右侧随之重算)。 */
+  updateActiveFromConditions: (partial: Partial<CandidateConditions>) => void;
 }
 
 /** 登录 + 多档案面板。Supabase env 存在时走真实 Auth/RLS；缺 env 时提供本地演示态，不阻断核心 6 步。 */
@@ -253,7 +272,15 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
       setMessage("已由「对话建条件」新增并切到该档案；右侧方案按此重算");
       if (HAS_SUPABASE && accountId) void saveProfile(next, accountId, true);
     },
-  }), [profiles, email, accountId, onActiveProfileChange]);
+    updateActiveFromConditions(partial: Partial<CandidateConditions>) {
+      if (!active) return;
+      const merged = mergeConditions(active.conditions, partial);
+      const updated = { ...active, conditions: merged };
+      setProfiles((prev) => prev.map((p) => (p.id === active.id ? updated : p)));
+      onActiveProfileChange(updated);
+      if (HAS_SUPABASE && accountId) void saveProfile(updated);
+    },
+  }), [profiles, email, accountId, onActiveProfileChange, active]);
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
