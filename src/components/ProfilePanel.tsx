@@ -8,6 +8,7 @@ export interface PlannerProfile {
   id: string;
   name: string;
   email: string;
+  account: string; // 伪登录账户名（档案按此分桶隔离，互不可见）
   conditions: CandidateConditions;
   persisted?: boolean;
 }
@@ -24,12 +25,14 @@ const HAS_SUPABASE = Boolean(
 );
 
 const DEMO_EMAIL = "demo-planner@example.com";
+const DEFAULT_ACCOUNT = "用户A";
 
-function makeProfile(name: string, email: string, base: CandidateConditions): PlannerProfile {
+function makeProfile(name: string, email: string, account: string, base: CandidateConditions): PlannerProfile {
   return {
     id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     name,
     email,
+    account,
     conditions: base,
   };
 }
@@ -79,7 +82,7 @@ function toDbProfile(profile: PlannerProfile, accountId: string, isActive: boole
   };
 }
 
-function fromDbProfile(row: Record<string, unknown>, email: string): PlannerProfile {
+function fromDbProfile(row: Record<string, unknown>, email: string, account: string): PlannerProfile {
   const category: SubjectCategory = row.subject_track === "historical" ? "历史类" : "物理类";
   const conditions: CandidateConditions = {
     province: String(row.province ?? "江苏"),
@@ -98,6 +101,7 @@ function fromDbProfile(row: Record<string, unknown>, email: string): PlannerProf
     id: String(row.id),
     name: String(row.name ?? "未命名档案"),
     email,
+    account,
     conditions,
     persisted: true,
   };
@@ -110,27 +114,41 @@ export interface ProfilePanelHandle {
   updateActiveFromConditions: (partial: Partial<CandidateConditions>) => void;
 }
 
-/** 登录 + 多档案面板。Supabase env 存在时走真实 Auth/RLS；缺 env 时提供本地演示态，不阻断核心 6 步。 */
+/** 伪登录 + 多考生档案面板。账户名即登录态（不做真实鉴权）；档案按账户分桶隔离。
+ *  Supabase env 存在时走真实 Auth/RLS（账户名=邮箱）；缺 env 时本地分桶演示，不阻断核心 6 步。 */
 const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function ProfilePanel({
   candidate,
   activeProfileId,
   onActiveProfileChange,
   onProfilesChange,
 }, ref) {
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [password, setPassword] = useState("Demo123456");
-  const [accountId, setAccountId] = useState<string>(HAS_SUPABASE ? "" : "local-account");
-  const [profiles, setProfiles] = useState<PlannerProfile[]>(() => [makeProfile("考生 A", DEMO_EMAIL, candidate)]);
-  const [message, setMessage] = useState(HAS_SUPABASE ? "请登录后读取账号档案" : "演示模式：缺 Supabase env，档案保存在本页内存中");
+  const [account, setAccount] = useState<string>(DEFAULT_ACCOUNT); // 当前伪登录账户（= 隔离桶 key）
+  const [accountInput, setAccountInput] = useState<string>(DEFAULT_ACCOUNT);
+  const [accountId, setAccountId] = useState<string>(HAS_SUPABASE ? "" : `pseudo-${DEFAULT_ACCOUNT}`);
+  // 全部档案（跨账户）；展示/操作只取当前 account 的子集 → 隔离
+  const [profiles, setProfiles] = useState<PlannerProfile[]>(() => [makeProfile("考生 A", DEMO_EMAIL, DEFAULT_ACCOUNT, candidate)]);
+  const [message, setMessage] = useState(
+    HAS_SUPABASE ? "请登录后读取账号档案" : "伪登录模式：输用户名即登录，档案按账户隔离（不依赖 Supabase/key）",
+  );
 
+  const visibleProfiles = useMemo(() => profiles.filter((p) => p.account === account), [profiles, account]);
   const active = useMemo(
-    () => profiles.find((p) => p.id === activeProfileId) ?? profiles[0],
-    [activeProfileId, profiles],
+    () => visibleProfiles.find((p) => p.id === activeProfileId) ?? visibleProfiles[0],
+    [activeProfileId, visibleProfiles],
   );
 
   useEffect(() => {
-    onProfilesChange(profiles, active?.id ?? "");
-  }, [active?.id, onProfilesChange, profiles]);
+    onProfilesChange(visibleProfiles, active?.id ?? "");
+  }, [active?.id, onProfilesChange, visibleProfiles]);
+
+  // 切到某账户后若该桶为空，补一个默认档案（保证总有可操作的当前档案）
+  useEffect(() => {
+    if (visibleProfiles.length === 0) {
+      const seed = makeProfile("考生 A", DEMO_EMAIL, account, candidate);
+      setProfiles((prev) => [...prev, seed]);
+      onActiveProfileChange(seed);
+    }
+  }, [account]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!HAS_SUPABASE) return;
@@ -138,8 +156,8 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
     supabase.auth.getUser().then(({ data }) => {
       if (data.user?.id) {
         setAccountId(data.user.id);
-        setEmail(data.user.email ?? email);
-        void loadProfiles(data.user.id, data.user.email ?? email);
+        setAccount(data.user.email ?? DEFAULT_ACCOUNT);
+        void loadProfiles(data.user.id, data.user.email ?? DEFAULT_ACCOUNT);
       }
     });
   }, []);
@@ -151,54 +169,38 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
       setMessage(`读取档案失败：${error.message}`);
       return;
     }
-    const next = (data ?? []).map((row) => fromDbProfile(row, userEmail));
+    const next = (data ?? []).map((row) => fromDbProfile(row, userEmail, userEmail));
     if (next.length === 0) {
-      const first = makeProfile("考生 A", userEmail, candidate);
+      const first = makeProfile("考生 A", userEmail, userEmail, candidate);
       const saved = await saveProfile(first, userId, true);
       if (saved) return;
-      setProfiles([first]);
+      setProfiles((prev) => [...prev.filter((p) => p.account !== userEmail), first]);
       onActiveProfileChange(first);
       return;
     }
+    setProfiles((prev) => [...prev.filter((p) => p.account !== userEmail), ...next]);
     const current = next.find((p, i) => Boolean(data?.[i]?.is_active)) ?? next[0];
-    setProfiles(next);
     onActiveProfileChange(current);
     setMessage(`已读取 ${next.length} 个档案（账号级 RLS 隔离）`);
   }
 
+  /** 伪登录：输用户名即登录（不做鉴权）；切到该账户的档案桶。 */
   async function signIn() {
-    if (!HAS_SUPABASE) {
-      setAccountId("local-account");
-      setMessage("已进入演示账号；配置 Supabase env 后自动切真实登录/RLS");
-      return;
-    }
-    const supabase = createClient();
-    const result = await supabase.auth.signInWithPassword({ email, password });
-    if (result.error) {
-      const signup = await supabase.auth.signUp({ email, password });
-      if (signup.error) {
-        setMessage(`登录/注册失败：${signup.error.message}`);
-        return;
-      }
-      setMessage("注册成功；如项目要求邮箱验证，请验证后再登录");
-      if (!signup.data.user?.id) return;
-      setAccountId(signup.data.user.id);
-      await loadProfiles(signup.data.user.id, signup.data.user.email ?? email);
-      return;
-    }
-    if (result.data.user?.id) {
-      setAccountId(result.data.user.id);
-      await loadProfiles(result.data.user.id, result.data.user.email ?? email);
+    const name = accountInput.trim() || DEFAULT_ACCOUNT;
+    setAccount(name);
+    setAccountId(HAS_SUPABASE ? accountId : `pseudo-${name}`);
+    setMessage(`已伪登录「${name}」；只显示该账户的档案，与其他账户隔离`);
+    if (HAS_SUPABASE && accountId) {
+      // Supabase 增强路径：按邮箱加载该账户档案（account=邮箱）
+      void loadProfiles(accountId, name);
     }
   }
 
-  async function signOut() {
-    if (HAS_SUPABASE) await createClient().auth.signOut();
-    const reset = makeProfile("考生 A", DEMO_EMAIL, candidate);
-    setAccountId(HAS_SUPABASE ? "" : "local-account");
-    setProfiles([reset]);
-    onActiveProfileChange(reset);
-    setMessage(HAS_SUPABASE ? "已退出" : "演示模式已重置");
+  function signOut() {
+    setAccount(DEFAULT_ACCOUNT);
+    setAccountInput(DEFAULT_ACCOUNT);
+    setAccountId(HAS_SUPABASE ? "" : `pseudo-${DEFAULT_ACCOUNT}`);
+    setMessage("已切回默认账户");
   }
 
   async function saveProfile(profile: PlannerProfile, userId = accountId, isActive = profile.id === active?.id) {
@@ -210,28 +212,27 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
       setMessage(`保存失败：${error.message}`);
       return false;
     }
-    const saved = fromDbProfile(data, email);
+    const saved = fromDbProfile(data, profile.email, profile.account);
     setProfiles((prev) => {
       const others = prev.filter((p) => p.id !== profile.id && p.id !== saved.id);
       return [...others, saved];
     });
     onActiveProfileChange(saved);
-    setMessage("已保存到当前账号；切换档案不会串条件");
+    setMessage("已保存到当前账户；切换档案/账户不会串条件");
     return true;
   }
 
   async function addProfile() {
-    const next = makeProfile(`考生 ${profiles.length + 1}`, email, cloneWithName(candidate, profiles.length + 1));
-    const nextProfiles = [...profiles, next];
-    setProfiles(nextProfiles);
+    const next = makeProfile(`考生 ${visibleProfiles.length + 1}`, DEMO_EMAIL, account, cloneWithName(candidate, visibleProfiles.length + 1));
+    setProfiles((prev) => [...prev, next]);
     onActiveProfileChange(next);
-    setMessage("已新增档案；默认复制当前条件并调整分/位次，便于观察候选随动");
+    setMessage("已新增档案（属当前账户）；默认复制当前条件并调整分/位次，便于观察候选随动");
     if (HAS_SUPABASE && accountId) await saveProfile(next, accountId, true);
   }
 
   async function deleteProfile(id: string) {
-    if (profiles.length <= 1) {
-      setMessage("至少保留 1 个档案");
+    if (visibleProfiles.length <= 1) {
+      setMessage("每个账户至少保留 1 个档案");
       return;
     }
     if (HAS_SUPABASE && !id.startsWith("local-")) {
@@ -241,9 +242,9 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
         return;
       }
     }
-    const next = profiles.filter((p) => p.id !== id);
-    setProfiles(next);
-    onActiveProfileChange(next[0]);
+    setProfiles((prev) => prev.filter((p) => p.id !== id));
+    const remain = visibleProfiles.filter((p) => p.id !== id);
+    if (remain[0]) onActiveProfileChange(remain[0]);
     setMessage("已删除档案；剩余档案条件保持独立");
   }
 
@@ -261,13 +262,13 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
     const synced = { ...active, conditions: candidate };
     setProfiles((prev) => prev.map((p) => (p.id === active.id ? synced : p)));
     void saveProfile(synced);
-    setMessage("当前表单条件已写入该档案；其他档案不受影响");
+    setMessage("当前表单条件已写入该档案；其他档案/账户不受影响");
   }
 
   useImperativeHandle(ref, () => ({
     addProfileFromConditions(conditions: CandidateConditions) {
-      const next = makeProfile(`考生 ${profiles.length + 1}（对话）`, email, conditions);
-      setProfiles([...profiles, next]);
+      const next = makeProfile(`考生 ${visibleProfiles.length + 1}（对话）`, DEMO_EMAIL, account, conditions);
+      setProfiles((prev) => [...prev, next]);
       onActiveProfileChange(next);
       setMessage("已由「对话建条件」新增并切到该档案；右侧方案按此重算");
       if (HAS_SUPABASE && accountId) void saveProfile(next, accountId, true);
@@ -280,29 +281,35 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
       onActiveProfileChange(updated);
       if (HAS_SUPABASE && accountId) void saveProfile(updated);
     },
-  }), [profiles, email, accountId, onActiveProfileChange, active]);
+  }), [profiles, account, accountId, onActiveProfileChange, active, visibleProfiles]);
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">账号 / 多考生档案</h2>
-          <p className="text-[11px] text-slate-500">账号级 + 档案级隔离；profile_id 只管归属，不进判定逻辑</p>
+          <p className="text-[11px] text-slate-500">伪登录（输用户名）+ 账户级档案隔离；账户/档案只管归属，不进判定</p>
         </div>
         <span className={`rounded px-2 py-0.5 text-[11px] ${HAS_SUPABASE ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-          {HAS_SUPABASE ? "Supabase" : "本地演示"}
+          {HAS_SUPABASE ? "Supabase" : "伪登录"}
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
-        <input value={email} onChange={(e) => setEmail(e.target.value)} className="rounded border border-slate-200 px-2 py-1" placeholder="邮箱" />
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="rounded border border-slate-200 px-2 py-1" placeholder="密码" />
-        <button type="button" onClick={signIn} className="rounded bg-slate-900 px-3 py-1 font-medium text-white">登录/注册</button>
-        <button type="button" onClick={signOut} className="rounded border border-slate-200 px-3 py-1 text-slate-600">退出</button>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          value={accountInput}
+          onChange={(e) => setAccountInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") signIn(); }}
+          className="flex-1 rounded border border-slate-200 px-2 py-1"
+          placeholder="用户名（如 用户A / 用户B）"
+        />
+        <button type="button" onClick={signIn} className="rounded bg-slate-900 px-3 py-1 font-medium text-white">登录</button>
+        <button type="button" onClick={signOut} className="rounded border border-slate-200 px-3 py-1 text-slate-600">默认</button>
+        <span className="rounded bg-indigo-50 px-2 py-0.5 text-indigo-700">当前账户：{account}</span>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {profiles.map((profile) => (
+        {visibleProfiles.map((profile) => (
           <button
             key={profile.id}
             type="button"
@@ -322,7 +329,7 @@ const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function 
           <input value={active.name} onChange={(e) => renameActive(e.target.value)} className="w-28 rounded border border-slate-200 px-2 py-1" />
           <button type="button" onClick={syncActiveFromForm} className="rounded bg-emerald-600 px-2.5 py-1 font-medium text-white">保存当前条件</button>
           <button type="button" onClick={() => deleteProfile(active.id)} className="rounded border border-red-200 px-2.5 py-1 text-red-600">删除档案</button>
-          <span className="text-[11px] text-slate-400">{accountId ? `账号：${email}` : "未登录"}</span>
+          <span className="text-[11px] text-slate-400">账户：{account}（档案隔离：仅显示本账户）</span>
         </div>
       )}
 
