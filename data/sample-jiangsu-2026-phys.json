@@ -1178,6 +1178,56 @@
       "reason": "物理类16组(首选物理/再选必选化学·南京校区)；2025投档560分(约30000位)。供选考化学的物理类中位次考生保底参考。",
       "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（物理等科目类）", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生(粗估)" },
       "caveats": [ "phase-2 位次段加密；subject_requirement 记‘物理+化学’=首选物理/再选必选化学", "仅2025投档分已核；2023/2024待补", "min_rank为粗估(物理类位次基数大)，待一分一段表官方复核", "专业组内专业清单/组级计划数待《江苏招生计划》核" ]
+    },
+    {
+      "id": "YZU-04H",
+      "school": { "name": "扬州大学", "code": "1381", "region": "江苏·扬州", "level_tags": ["公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "04", "subject_requirement": "历史", "subject_requirement_note": "首选历史、再选不限（历史类04组）" },
+      "recruitment": { "plan": null, "plan_granularity": "校·历史类总量(非本组)", "duration": 4, "tuition": 5200, "tuition_note": "文科类5200(苏价费〔2014〕136号)；待核" },
+      "history": [ { "year": 2025, "plan": null, "min_score": 603, "min_rank": 6500, "rank_diff": null, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "投档分已核/位次一分一段表派生待复核", "rank_via": "一分一段表派生" } } ],
+      "reason": "历史类04组(首选历史/再选不限·扬州)；2025投档603分(约6500位)。供历史类考生保底参考。",
+      "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" },
+      "caveats": [ "phase-2 位次段加密；subject_requirement 记‘历史’=首选历史/再选不限", "仅2025投档分已核；2023/2024待补", "min_rank为一分一段表派生，待官方复核", "专业组内专业清单/组级计划数待《江苏招生计划》核" ]
+    },
+    {
+      "id": "JSU-01H",
+      "school": { "name": "江苏大学", "code": "1401", "region": "江苏·镇江", "level_tags": ["公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "01", "subject_requirement": "历史", "subject_requirement_note": "首选历史、再选不限（历史类01组）" },
+      "recruitment": { "plan": null, "plan_granularity": "校·历史类总量(非本组)", "duration": 4, "tuition": 5200, "tuition_note": "文科类5200(苏价费〔2014〕136号)；待核" },
+      "history": [ { "year": 2025, "plan": null, "min_score": 572, "min_rank": 10500, "rank_diff": null, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "投档分已核/位次一分一段表派生待复核", "rank_via": "一分一段表派生" } } ],
+      "reason": "历史类01组(首选历史/再选不限·镇江)；2025投档572分(约10500位)。供历史类考生保底参考。",
+      "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" },
+      "caveats": [ "phase-2 位次段加密；subject_requirement 记‘历史’=首选历史/再选不限", "仅2025投档分已核；2023/2024待补", "min_rank为一分一段表派生，待官方复核", "专业组内专业清单/组级计划数待《江苏招生计划》核" ]
+    },
+    {
+      "id": "JOU-01H",
+      "school": { "name": "江苏海洋大学", "code": "1321", "region": "江苏·连云港", "level_tags": ["公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "01", "subject_requirement": "历史", "subject_requirement_note": "首选历史、再选不限（历史类01组）" },
+      "recruitment": { "plan": null, "plan_granularity": "校·历史类总量(非本组)", "duration": 4, "tuition": 5200, "tuition_note": "文科类5200(苏价费〔2014〕136号)；待核" },
+      "history": [ { "year": 2025, "plan": null, "min_score": 552, "min_rank": 14000, "rank_diff": null, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "投档分已核/位次一分一段表派生待复核", "rank_via": "一分一段表派生" } } ],
+      "reason": "历史类01组(首选历史/再选不限·连云港)；2025投档552分(约14000位)。供历史类低位次考生保底参考。",
+      "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" },
+      "caveats": [ "phase-2 位次段加密；subject_requirement 记‘历史’=首选历史/再选不限", "仅2025投档分已核；2023/2024待补", "min_rank为一分一段表派生，待官方复核", "专业组内专业清单/组级计划数待《江苏招生计划》核" ]
+    },
+    {
+      "id": "HYIT-01H",
+      "school": { "name": "淮阴工学院", "code": "1342", "region": "江苏·淮安", "level_tags": ["公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "01", "subject_requirement": "历史", "subject_requirement_note": "首选历史、再选不限（历史类01组）" },
+      "recruitment": { "plan": null, "plan_granularity": "校·历史类总量(非本组)", "duration": 4, "tuition": 5200, "tuition_note": "文科类5200(苏价费〔2014〕136号)；待核" },
+      "history": [ { "year": 2025, "plan": null, "min_score": 539, "min_rank": 18000, "rank_diff": null, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "投档分已核/位次一分一段表派生待复核", "rank_via": "一分一段表派生" } } ],
+      "reason": "历史类01组(首选历史/再选不限·淮安)；2025投档539分(约18000位)。供历史类低位次考生保底参考。",
+      "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" },
+      "caveats": [ "phase-2 位次段加密；subject_requirement 记‘历史’=首选历史/再选不限", "仅2025投档分已核；2023/2024待补", "min_rank为一分一段表派生，待官方复核", "专业组内专业清单/组级计划数待《江苏招生计划》核" ]
+    },
+    {
+      "id": "YCIT-01H",
+      "school": { "name": "盐城工学院", "code": "1361", "region": "江苏·盐城", "level_tags": ["公办"], "batch": "普通类本科批" },
+      "major_group": { "group_no": "01", "subject_requirement": "历史", "subject_requirement_note": "首选历史、再选不限（历史类01组）" },
+      "recruitment": { "plan": null, "plan_granularity": "校·历史类总量(非本组)", "duration": 4, "tuition": 5200, "tuition_note": "文科类5200(苏价费〔2014〕136号)；待核" },
+      "history": [ { "year": 2025, "plan": null, "min_score": 533, "min_rank": 19000, "rank_diff": null, "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "投档分已核/位次一分一段表派生待复核", "rank_via": "一分一段表派生" } } ],
+      "reason": "历史类01组(首选历史/再选不限·盐城)；2025投档533分(约19000位)。供历史类低位次考生保底参考。",
+      "source": { "url": "https://www.jseea.cn/webfile/upload/2025/07-18/09-33-380724-1917118608.pdf", "publisher": "江苏省教育考试院", "doc": "江苏省2025年普通类本科批次平行志愿投档线（历史等科目类）", "updated": "2025-07-18", "status": "待官方复核", "rank_via": "一分一段表派生" },
+      "caveats": [ "phase-2 位次段加密；subject_requirement 记‘历史’=首选历史/再选不限", "仅2025投档分已核；2023/2024待补", "min_rank为一分一段表派生，待官方复核", "专业组内专业清单/组级计划数待《江苏招生计划》核" ]
     }
   ]
 }
