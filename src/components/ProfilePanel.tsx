@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import type { CandidateConditions, SubjectCategory } from "@/decision/types";
 import { createClient } from "../../lib/supabase/client";
 
@@ -86,13 +86,18 @@ function fromDbProfile(row: Record<string, unknown>, email: string): PlannerProf
   };
 }
 
+export interface ProfilePanelHandle {
+  /** 由「对话建条件」完成时调用：用抽到的条件新建一个考生档案并切为当前。 */
+  addProfileFromConditions: (conditions: CandidateConditions) => void;
+}
+
 /** 登录 + 多档案面板。Supabase env 存在时走真实 Auth/RLS；缺 env 时提供本地演示态，不阻断核心 6 步。 */
-export default function ProfilePanel({
+const ProfilePanel = forwardRef<ProfilePanelHandle, ProfilePanelProps>(function ProfilePanel({
   candidate,
   activeProfileId,
   onActiveProfileChange,
   onProfilesChange,
-}: ProfilePanelProps) {
+}, ref) {
   const [email, setEmail] = useState(DEMO_EMAIL);
   const [password, setPassword] = useState("Demo123456");
   const [accountId, setAccountId] = useState<string>(HAS_SUPABASE ? "" : "local-account");
@@ -240,6 +245,16 @@ export default function ProfilePanel({
     setMessage("当前表单条件已写入该档案；其他档案不受影响");
   }
 
+  useImperativeHandle(ref, () => ({
+    addProfileFromConditions(conditions: CandidateConditions) {
+      const next = makeProfile(`考生 ${profiles.length + 1}（对话）`, email, conditions);
+      setProfiles([...profiles, next]);
+      onActiveProfileChange(next);
+      setMessage("已由「对话建条件」新增并切到该档案；右侧方案按此重算");
+      if (HAS_SUPABASE && accountId) void saveProfile(next, accountId, true);
+    },
+  }), [profiles, email, accountId, onActiveProfileChange]);
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
       <div className="flex items-center justify-between gap-2">
@@ -287,4 +302,6 @@ export default function ProfilePanel({
       <p className="mt-2 text-[11px] text-slate-500">{message}</p>
     </section>
   );
-}
+});
+
+export default ProfilePanel;
