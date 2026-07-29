@@ -57,7 +57,7 @@ export default function Workspace() {
     const id = setTimeout(() => {
       setStatus("loading");
       setErrMsg("");
-      const body = { candidate, candidates: CANDIDATES, rules: RULES, strategies: [strategy] };
+      const body = { candidate, candidates: CANDIDATES, rules: RULES, strategies: STRATEGIES };
       const eligBody = { candidate, candidates: CANDIDATES, rules: RULES };
       Promise.all([
         fetch("/api/compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<DecisionResponse<ComparisonResult>>),
@@ -77,6 +77,7 @@ export default function Workspace() {
   }, [candidate, strategy]);
 
   const group = compare?.data?.groups.find((g) => g.strategy === strategy) ?? compare?.data?.groups[0];
+  const groups = compare?.data?.groups ?? [];
   const outOfReach = compare?.data?.out_of_reach ?? [];
   const eligResults = elig?.data ?? [];
   const eligPassed = eligResults.filter((r) => r.passed).length;
@@ -157,7 +158,7 @@ export default function Workspace() {
           </div>
         )}
         {status === "ready" && compare && (
-          <ReadyView compare={compare} group={group} outOfReach={outOfReach} eligPassed={eligPassed} eligTotal={eligResults.length} elig={eligResults} />
+          <ReadyView compare={compare} group={group} groups={groups} strategy={strategy} outOfReach={outOfReach} eligPassed={eligPassed} eligTotal={eligResults.length} elig={eligResults} />
         )}
       </div>
     </div>
@@ -167,6 +168,8 @@ export default function Workspace() {
 function ReadyView({
   compare,
   group,
+  groups,
+  strategy,
   outOfReach,
   eligPassed,
   eligTotal,
@@ -174,6 +177,8 @@ function ReadyView({
 }: {
   compare: DecisionResponse<ComparisonResult>;
   group?: StrategyGroup;
+  groups: StrategyGroup[];
+  strategy: Strategy;
   outOfReach: RankedCandidate[];
   eligPassed: number;
   eligTotal: number;
@@ -216,11 +221,31 @@ function ReadyView({
         </details>
       </div>
 
-      {/* 步骤 04 方案比较：主候选卡（引擎按当前策略排好序） */}
-      {group.candidates.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {group.candidates.map((c) => (
-            <CandidateCard key={c.id} card={c} />
+      {/* 步骤 04 方案比较：两套策略并排（§3「并排比较至少两套方案」） */}
+      {groups.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+          {groups.map((g) => (
+            <div
+              key={g.strategy}
+              className={`rounded-xl border p-3 ${g.strategy === strategy ? "border-indigo-300 bg-indigo-50/30" : "border-slate-200 bg-white"}`}
+            >
+              <div className="mb-2 flex items-center gap-2 text-xs">
+                <span className="font-medium text-slate-700">{g.strategy}</span>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">{g.candidates.length} 个候选</span>
+                {g.strategy === strategy && <span className="text-indigo-500">· 当前选中</span>}
+              </div>
+              {g.candidates.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3">
+                  {g.candidates.map((c) => (
+                    <CandidateCard key={c.id} card={c} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  该策略下无可进主推荐的候选。
+                </div>
+              )}
+            </div>
           ))}
         </div>
       ) : (
