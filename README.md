@@ -25,7 +25,7 @@
 ## 技术栈（已锁定 D-003）
 
 Next.js(App Router) 一体全栈 + TypeScript + Tailwind + Supabase(Postgres+Auth+RLS) + Prisma。
-规则/概率引擎 = TS 纯函数（`src/decision/*`，AI工程师 MAO-12），数据 = JSON（数据角色 MAO-9），LLM 编排同仓 TS（待 MAO-14）。详见 [docs/DATA-MODEL.md](./docs/DATA-MODEL.md) 与 [docs/API-CONTRACT.md](./docs/API-CONTRACT.md)。
+规则/概率引擎 = TS 纯函数（`src/decision/*`，AI工程师 MAO-12），数据 = JSON（数据角色 MAO-9）。**对话建条件 = 确定性层（`/api/condition-building`，不用 LLM key）**；LLM 自然语言增强为可选锦上添花（maozh2 决定暂不接入 key）。详见 [docs/DATA-MODEL.md](./docs/DATA-MODEL.md) 与 [docs/API-CONTRACT.md](./docs/API-CONTRACT.md)。
 
 ---
 
@@ -33,29 +33,30 @@ Next.js(App Router) 一体全栈 + TypeScript + Tailwind + Supabase(Postgres+Aut
 
 > 红线：每个数据点都可追溯到**官方来源 + 数据年份/更新时间**。完整明细见 [`data/DATA-PACKAGE.md`](./data/DATA-PACKAGE.md)。
 
-- **范围**：江苏省 · 2026 年 · 物理类（示例考生 637 分 / 位次 5,200 / 选科 物理+化学）。
-- **数据集**：[`data/sample-jiangsu-2026-phys.json`](./data/sample-jiangsu-2026-phys.json)（状态 **sample**，关键路径交付）—— 4 张候选卡 / 3 所院校（东南大学 1102、南京理工大学 1104、河海大学 1105），覆盖冲刺 / 稳妥 / 保底。
-- **字段契约**：与 [`src/decision/types.ts`](./src/decision/types.ts) 的 `CandidateCard` / `Rule` 一致，决策引擎可直接 `import` 消费（**非 mock**）。
+- **范围**：江苏省 · 2026 年 · **物理类 + 历史类两类**（maozh2 要求覆盖大部分考生；示例考生 637 分 / 位次 5,200 / 选科 物理+化学）。
+- **数据集**：物理类 [`data/sample-jiangsu-2026-phys.json`](./data/sample-jiangsu-2026-phys.json) + 历史类卡，共 **3666 张专业组卡**（物理 2511 / 996 校，历史 1155 / 803 校），投档分全段覆盖（物理 463–686 / 历史 482–679）。由 jseea 2025 投档线 PDF 经 pymupdf 批量解析 + converter 脚本转卡（取代手填 / web 逐校爬），来源全标官方 URL。
+- **字段契约**：与 [`src/decision/types.ts`](./src/decision/types.ts) 的 `CandidateCard` / `Rule` 一致，决策引擎可直接 `import` 消费（**非 mock**）；`subject_requirement` 用「物理+化学 / 历史+思想政治 / 不限」格式，引擎 per-card 首选+再选硬过滤直消费。
 
 ### 数据年份与层级
 
 | 数据项 | 来源 | 年份 | 可信度 |
 |---|---|---|---|
-| 投档最低分 `min_score` | 江苏省教育考试院投档线 PDF（权威、各源一致） | 2023–2025 | 权威 |
-| 最低位次 `min_rank` | 由「一分一段表」派生（PDF 不含位次） | 2023–2025 | 各聚合站 ±300 位出入，标 `status=待官方复核` |
-| 招生计划 `plan` | 江苏招生计划汇编 / 志愿填报辅助系统 | 2026 | 当前为校·物理类总量；组级精确计划待抽取（`plan=null`） |
-| 选科要求 | 教育部《指引》+ 江苏选考科目要求 | 2024–2026 | 本样本 4 组均「物理+化学」 |
-| 学费 | 各校招生章程 + 苏价费〔2014〕136号 | 当年度 | 4 组 5800–6380 |
+| 投档最低分 `min_score` | 江苏省教育考试院（jseea）投档线 PDF，pymupdf 批量解析 | **2025 权威**（2024 回填中） | 权威 |
+| 最低位次 `min_rank` | 由「一分一段表」派生 | 2024–2025 | **3666 卡中仅 61 条手填有值，3621 条 null 标「待一分一段表派生」**；引擎在空时按投档分差兜底（MAO-26），位次后续补精 |
+| 招生计划 `plan` / 学费 / 专业清单 majors / 城市 | 江苏招生计划汇编 / 各校章程 | 2026 / 当年度 | 待回填（部分 `null`，规则不阻断、标 caveat） |
+| 选科要求 | 教育部《指引》+ 江苏选考科目要求 | 2024–2026 | 每专业组完整首选+再选要求（物理+化学 / 历史+思想政治 等），逐组核、标来源 |
+
+> 推荐年份口径：**2026 推荐以 2024/2025 为主依据**（maozh2），2023 仅趋势参考；卡片标清年份/来源/待核，不得把 2026 说成真实录取结论。
 
 ### 官方来源链接
 
-- 投档线 2025（物理类）：<https://www.jseea.cn/webfile/upload/2025/07-18/09-33-5302461102655621.pdf>
-- 投档线 2024 / 2023（物理类）：<https://www.jseea.cn/>（`webfile/index/index_zkxx`）
-- 一分一段表 2025（位次派生）：<https://www.jseea.cn/>
+- 投档线 2025（物理类 / 历史等科目类）：<https://www.jseea.cn/>（`webfile/index/index_zkxx`，两册 PDF）
+- 投档线 2024 / 2023：<https://www.jseea.cn/>
+- 一分一段表 2025（位次派生，**图片格式、工具链暂无 OCR、位次回填受阻**）：<https://www.jseea.cn/>
 - 选科要求：<https://www.jseea.cn/> · <https://gaokao.chsi.com.cn/>
-- 招生计划 / 学费章程：<https://www.jseea.cn/> · 各校招生网（东南 zsb.seu.edu.cn、南理工 zsb.njust.edu.cn）
+- 招生计划 / 学费章程：<https://www.jseea.cn/> · 各校招生网
 
-> 概率参考方法 = **近3年位次差法**（`method` + `data_years=2023-2025`），确定性算术、**非录取预测**。
+> 概率参考方法 = **位次差法（min_rank 有值）+ 投档分差兜底（min_rank 空，MAO-26）**（`probability_ref.method` + 数据年份），确定性算术、**非录取预测**；reason 标注当前用哪种方法、不混淆。
 
 ## 资格规则（交付物2 · 透明化）
 
@@ -78,14 +79,16 @@ Next.js(App Router) 一体全栈 + TypeScript + Tailwind + Supabase(Postgres+Aut
 
 | 步骤 | 内容 | 页面 / API（代码位置） |
 |---|---|---|
-| **01 对话建立条件** | 填写 / 追问影响资格的缺失条件与冲突 | [`ConditionForm`](./src/components/ConditionForm.tsx)（结构化表单：省 / 年度 / 科类首选 + 再选 / 分 / 位次 / 学费预算） |
+| **01 对话建立条件** | 填写 / 追问影响资格的缺失条件与冲突 | **两种模式**：[`ConditionForm`](./src/components/ConditionForm.tsx)（结构化表单）或 [`ChatPanel`](./src/components/ChatPanel.tsx)（自然语言对话 → `POST /api/condition-building` 确定性层：抽条件 / `findMissingConditions` / 冲突检测 / 追问，**不用 LLM key**；ready 后建立/更新考生档案并驱动下游） |
 | **02 获取官方信息** | 展示本省本年度真实数据 + 原始来源 | 候选卡 `source.url` + `updated` + `status`（江苏考试院投档线 PDF） |
 | **03 资格过滤** | 逐条规则判定，排除不满足硬条件的候选 | `POST /api/eligibility`（`checkEligibility`，阻断 / advisory / needs_review 可展开） |
-| **04 方案比较** | 候选 / 差距 / 成本 / 风险 + 多策略取舍并排 | `POST /api/compare`（`compare`，按 院校优先 / 专业优先 / 均衡 排序，概率档 / 位次差 / 理由） |
+| **04 方案比较** | 候选 / 差距 / 成本 / 风险 + 多策略取舍并排 | `POST /api/compare`（`compare`，传全部策略 → 「院校优先 / 专业优先」**两套方案并排**双列、选中高亮；概率档 / 位次差或投档分差 / 多因素理由） |
 | **05 修改条件重算** | 改一项分数 / 预算 / 地区 / 目标，重跑过滤 + 规划，对比前后版本 | `POST /api/recompute`（`recompute` → `diff.added/removed/changed`）；前端 debounce 300ms 并行重调 |
 | **06 确认导出** | 确认最终方案，导出带来源的行动计划 | `exportReport()`（Workspace）→ Markdown（条件 / 资格 / 方案排序 / 每条来源 + 时间 / 三红线声明）→ `.md` 下载 |
 
 **异常路径**：缺关键条件 → `info_insufficient`；无候选通过 → `no_result`（均给原因 + 下一步）。
+
+> **TASK-SPEC §三 4 核心功能**：①对话建条件（确定性层 + 对话每轮更新档案）✅ ②资格校验 ✅ ③两套方案并排 ✅ ④计划与版本（关键日期「待公布」+ 风险提醒 + 版本随动面板，`fullstack/plan-version-panel`）✅。每张候选卡带**多因素推荐理由**（位次 + 选科 + 预算 + 年份 trace）。
 
 ## 真实 vs 模拟功能（显式标注）
 
@@ -93,23 +96,30 @@ Next.js(App Router) 一体全栈 + TypeScript + Tailwind + Supabase(Postgres+Aut
 
 ### ✅ 真实实现并运行
 
-- **决策核心引擎**：资格校验 / 概率档 / 方案排序 / 改条件重算 / 版本差异 = TS 纯函数（`src/decision/*`），`vitest` 44 用例全绿；输入相同输出相同。
-- **数据**：真实官方来源结构化 JSON（投档线取江苏省教育考试院 PDF）。
-- **概率**：位次差法确定性算术（**非写死** —— 换分数 / 位次，候选与档位随之变化，已验证）。
+- **决策核心引擎**：资格校验 / 概率档 / 方案排序 / 改条件重算 / 版本差异 / 对话建条件 / 多因素推荐理由 = TS 纯函数（`src/decision/*`），`vitest` 78 用例全绿；输入相同输出相同。
+- **§三 ① 对话建条件（确定性层，不用 LLM key）**：`/api/condition-building` 抽条件 + 追问 + 冲突检测；对话每轮实时更新考生档案、右侧随重算。
+- **§三 ② 资格校验**：per-card `subject_requirement` 首选+再选硬过滤。
+- **§三 ③ 两套方案并排**：「院校优先 / 专业优先」双列并排。
+- **§三 ④ 计划与版本**：关键日期（待公布）+ 风险提醒 + 版本随动面板。
+- **多因素推荐理由**：每张卡 reason 同时含 位次差+冲稳保档 / 选科符合性 / 预算 / 参考年份+非预测声明。
+- **伪登录 + 账户档案分桶隔离**（MAO-21）：输用户名即登录；A 账户看不到 B 档案、增删/对话建档只影响当前账户桶。
+- **数据（双类 3666 卡）**：物理 991 / 996 校 + 历史 1155 / 803 校，jseea 2025 投档线 PDF 批量解析转卡。
+- **概率 + 候选随动**：位次差法 / 投档分差兜底确定性算术（**非写死** —— 换分数 / 位次 / 选科，候选与档位随之变化，已验证）。
 - **官方来源入口**：每张候选卡可打开官方链接并查看更新时间。
 - **6 步端到端**：API 调真引擎，非 mock / 非录像。
 
 ### ⚠️ 样本 / 占位（数据层面，已逐项标注）
 
-- 最低位次 `min_rank`：一分一段表派生（标 `status=待官方复核`，聚合站 ±300 位出入）。
-- 招生计划 `plan`：当前校·物理类总量；组级精确计划待计划汇编抽取（`plan=null`，规则暂不阻断）。
-- 东南 SEU-06 组 2023 投档最低分待补。
+- **最低位次 `min_rank`**：3666 卡中仅 61 条手填有值，3621 条 null 标「待一分一段表派生」（一分一段表为图片、工具链暂无 OCR）；引擎走投档分差兜底（MAO-26）不阻塞，位次后续补精。
+- **招生计划 / 学费 / 专业清单 majors / 城市**：待《招生计划》回填（部分 `null`，规则不阻断、标 caveat）。
+- **2024 投档分**：现以 2025 为主，2024 回填中。
 
-### 🧪 模拟 / 后置增强（明确标注，未作为已实现）
+### 🧪 可选增强 / 已知限制（明确标注）
 
-- **LLM 自然语言对话建条件**：当前为结构化表单（`ConditionForm`）；自然语言对话 + LLM 编排待 AI 工程师接入。
-- **Supabase 登录 / 多账户隔离 / RLS**：增强项，**可后置**（MAO-2）；核心流程零环境变量、不依赖它即可部署运行。
-- 页头「一账号 · 多考生档案」标签为规划占位（数据模型已建，鉴权待接入）。
+- **LLM 自然语言增强层**：maozh2 决定**不用 LLM key**；对话建条件走确定性层已可用，LLM 仅作可选锦上添花（非必需）。
+- **真实 Supabase Auth / RLS**：当前为**伪登录 + 本地账户分桶隔离**（验收口径：账号/档案数据隔离真实生效即可，MAO-21 已实现）；生产级真实 Auth/RLS 为可选增强。
+- **已知限制（验收参考）**：①引擎需考生提供**位次**（只给分不给位次 → `info_insufficient`）；②近本科线考生（物理 ~470 / 历史 ~490）只有冲+稳、**无保底**（本科线是地板，不扩专科/民办无法补）——周有局限，不作为缺陷。
+- 手机端真机视觉未单独跑（响应式 Tailwind 已实现）。
 
 ---
 
@@ -120,11 +130,11 @@ npm install
 npm run db:generate   # prisma generate（生成 @prisma/client 类型；构建前跑一次）
 npm run dev           # http://localhost:3000
 npm run build         # 生产构建（= prisma generate && next build，见 vercel.json）
-npm run test          # 引擎 vitest 单测（44 用例）
+npm run test          # 引擎 vitest 单测（78 用例）
 npm run qa            # 6 步黑盒回归（需先 npm run dev/start，打 http://localhost:3000）
 ```
 
-> 前端：`app/page.tsx` + `src/components/*`（ConditionForm / Workspace / CandidateCard）；建条件表单 + 工作区双栏 + 结构化候选卡。
+> 前端：`app/page.tsx` + `src/components/*`（ConditionForm / **ChatPanel**（对话建条件）/ Workspace / CandidateCard / **两套方案并排** / **计划与版本面板** / ProfilePanel）；建条件（表单/对话）+ 工作区双栏 + 结构化候选卡。
 > 候选卡数据来自真引擎 `POST /api/compare`（`src/decision` 纯函数算概率档/位次差/理由/排序），**非 mock**。
 > 数据库/鉴权（MAO-2）需先建 Supabase 项目并配 `.env`（见 `.env.example`），运行 `npm run db:setup`。
 
