@@ -16,6 +16,7 @@ import type {
 import sample from "../../data/sample-jiangsu-2026-phys.json";
 import rulesData from "../../data/rules.example.json";
 import CandidateCard from "./CandidateCard";
+import ChatPanel from "./ChatPanel";
 import ConditionForm from "./ConditionForm";
 import ProfilePanel, { type PlannerProfile } from "./ProfilePanel";
 
@@ -34,6 +35,7 @@ export default function Workspace() {
   const [strategy, setStrategy] = useState<StrategyKey>("院校优先");
   const [activeProfileId, setActiveProfileId] = useState("");
   const [profiles, setProfiles] = useState<PlannerProfile[]>([]);
+  const [condMode, setCondMode] = useState<"form" | "chat">("form");
 
   const [status, setStatus] = useState<Status>("loading");
   const [errMsg, setErrMsg] = useState("");
@@ -89,8 +91,26 @@ export default function Workspace() {
           onActiveProfileChange={handleActiveProfileChange}
           onProfilesChange={handleProfilesChange}
         />
-        <div className="min-h-[360px] flex-1">
-          <ConditionForm value={candidate} onChange={setCandidate} />
+        <div className="flex min-h-[360px] flex-1 flex-col">
+          <div className="mb-2 flex gap-1 text-xs">
+            {(["form", "chat"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setCondMode(m)}
+                className={`rounded-md border px-2 py-0.5 ${condMode === m ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+              >
+                {m === "form" ? "表单建条件" : "对话建条件"}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1">
+            {condMode === "form" ? (
+              <ConditionForm value={candidate} onChange={setCandidate} />
+            ) : (
+              <ChatPanel onReady={setCandidate} />
+            )}
+          </div>
         </div>
       </div>
 
