@@ -16,6 +16,8 @@ import {
   findConditionErrors,
   findConflicts,
   findMissingConditions,
+  PROB_METHOD,
+  PROB_METHOD_SCORE,
   probabilityRef,
   rankCandidates,
   recompute,
@@ -302,6 +304,42 @@ describe('rankCandidates · 多因素推荐理由', () => {
     const card = makeCard({ id: 'A', major_group: { group_no: '01', subject_requirement: '' } });
     const r = rankCandidates([card], candidate(), '均衡')[0];
     expect(r.reason).toContain('选科要求未标注');
+  });
+});
+
+// ===========================================================================
+// 4c. rankCandidates · 投档分差兜底分档（MAO-26：min_rank 缺失时）
+// ===========================================================================
+
+describe('rankCandidates · 投档分差兜底分档（MAO-26）', () => {
+  it('min_rank 非空 → 位次差法不变 + method 标位次差', () => {
+    const card = makeCard({ id: 'A', history: [{ year: 2024, plan: 10, min_score: 640, min_rank: 5500 }] });
+    const r = rankCandidates([card], candidate({ rank: 5200, score: 637 }), '均衡')[0];
+    expect(r.probability_ref.tier).toBe('稳妥'); // rank_diff=-300
+    expect(r.probability_ref.method).toBe(PROB_METHOD);
+    expect(r.reason).toContain('位次差');
+    expect(r.reason).not.toContain('投档分差');
+  });
+  it('min_rank 缺失 → 投档分差兜底分档 + method 标投档分差', () => {
+    const card = makeCard({ id: 'A', history: [{ year: 2024, plan: 10, min_score: 640, min_rank: null as unknown as number }] });
+    const r = rankCandidates([card], candidate({ rank: 5200, score: 637 }), '均衡')[0];
+    expect(r.probability_ref.tier).toBe('冲刺'); // score_diff=-3 ∈ [-10,0)
+    expect(r.probability_ref.method).toBe(PROB_METHOD_SCORE);
+    expect(r.reason).toContain('投档分差');
+    expect(r.reason).toContain('位次待');
+    expect(r.reason).not.toContain('位次差');
+  });
+  it('投档分差 ≥ +15 → 保底', () => {
+    const card = makeCard({ id: 'A', history: [{ year: 2024, plan: 10, min_score: 600, min_rank: null as unknown as number }] });
+    expect(rankCandidates([card], candidate({ score: 637 }), '均衡')[0].probability_ref.tier).toBe('保底'); // 637-600=37
+  });
+  it('投档分差 0~+15 → 稳妥', () => {
+    const card = makeCard({ id: 'A', history: [{ year: 2024, plan: 10, min_score: 625, min_rank: null as unknown as number }] });
+    expect(rankCandidates([card], candidate({ score: 637 }), '均衡')[0].probability_ref.tier).toBe('稳妥'); // 637-625=12
+  });
+  it('投档分差 < -10 → 差距过大', () => {
+    const card = makeCard({ id: 'A', history: [{ year: 2024, plan: 10, min_score: 660, min_rank: null as unknown as number }] });
+    expect(rankCandidates([card], candidate({ score: 637 }), '均衡')[0].probability_ref.tier).toBe('差距过大'); // 637-660=-23
   });
 });
 

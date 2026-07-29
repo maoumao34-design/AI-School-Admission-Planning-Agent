@@ -230,7 +230,15 @@ export function latestYear(history: HistoryRecord[]): HistoryRecord | undefined 
 export function rankDiff(card: CandidateCard, candidateRank: number): number | undefined {
   const latest = latestYear(card.history);
   if (!latest) return undefined;
+  if (latest.min_rank == null || latest.min_rank <= 0) return undefined; // 位次缺失/待一分一段表派生
   return candidateRank - latest.min_rank;
+}
+
+/** 投档分差（MAO-26 兜底）：min_rank 缺失时用 考生分 - 最近年投档分。 */
+export function scoreDiff(card: CandidateCard, candidateScore: number): number | undefined {
+  const latest = latestYear(card.history);
+  if (!latest || latest.min_score == null) return undefined;
+  return candidateScore - latest.min_score;
 }
 
 export function probabilityRef(
@@ -246,6 +254,26 @@ export function tierOf(rankDiffValue: number | undefined): ProbabilityTier {
   if (rankDiffValue <= TIER_THRESHOLDS.safetyUpper) return '保底';
   if (rankDiffValue <= TIER_THRESHOLDS.stableUpper) return '稳妥';
   if (rankDiffValue <= TIER_THRESHOLDS.reachUpper) return '冲刺';
+  return '差距过大';
+}
+
+/**
+ * 投档分差法阈值（MAO-26）：min_rank 缺失时按 考生分 vs 投档分 兜底分档。
+ * 分差方向：考生分 - 投档分，正值=高于投档线（越稳）。
+ */
+export const SCORE_TIER_THRESHOLDS = {
+  safetyUpper: 15, // 考生分 >= 投档线+15 → 保底
+  stableUpper: 0, // 投档线 ~ 投档线+15 → 稳妥
+  reachUpper: -10, // 投档线-10 ~ 投档线 → 冲刺；更低 → 差距过大
+};
+
+export const PROB_METHOD_SCORE = '投档分差法（位次待一分一段表派生）';
+
+export function tierOfScore(scoreDiffValue: number | undefined): ProbabilityTier {
+  if (scoreDiffValue === undefined) return '冲刺';
+  if (scoreDiffValue >= SCORE_TIER_THRESHOLDS.safetyUpper) return '保底';
+  if (scoreDiffValue >= SCORE_TIER_THRESHOLDS.stableUpper) return '稳妥';
+  if (scoreDiffValue >= SCORE_TIER_THRESHOLDS.reachUpper) return '冲刺';
   return '差距过大';
 }
 
@@ -273,13 +301,36 @@ export function rankCandidates(
   dataYears: string = DEFAULT_DATA_YEARS,
 ): RankedCandidate[] {
   const ranked = cards.map((card) => {
-    const diff = rankDiff(card, candidate.rank) ?? Number.POSITIVE_INFINITY;
-    const probability_ref = probabilityRef(diff, dataYears);
+    // MAO-26：min_rank 非空 → 位次差法；缺失 → 投档分差兜底；都缺 → 保守冲刺。
+    const rankDiffValue = rankDiff(card, candidate.rank);
+    const scoreDiffValue = scoreDiff(card, candidate.score);
+    let diff: number;
+    let tier: ProbabilityTier;
+    let method: string;
+    if (rankDiffValue !== undefined) {
+      diff = rankDiffValue;
+      tier = tierOf(diff);
+      method = PROB_METHOD;
+    } else if (scoreDiffValue !== undefined) {
+      diff = scoreDiffValue;
+      tier = tierOfScore(diff);
+      method = PROB_METHOD_SCORE;
+    } else {
+      diff = Number.POSITIVE_INFINITY;
+      tier = '冲刺';
+      method = PROB_METHOD;
+    }
+    const probability_ref: ProbabilityRef = {
+      tier,
+      pct_ref_band: pctBand(tier),
+      method,
+      data_years: dataYears,
+    };
     return {
       ...card,
       rank_diff_vs_candidate: diff,
       probability_ref,
-      reason: buildReason(card, candidate, diff, probability_ref.tier, dataYears),
+      reason: buildReason(card, candidate, diff, tier, dataYears, method),
     };
   });
   return ranked.sort((a, b) => sortByStrategy(strategy, a, b));
@@ -415,17 +466,22 @@ function buildReason(
   diff: number,
   tier: ProbabilityTier,
   dataYears: string,
+  method: string = PROB_METHOD,
 ): string {
   const head = `${card.school.name} ${card.major_group.group_no}组`;
   let rankPart: string;
   if (!Number.isFinite(diff)) {
-    rankPart = '缺历史位次数据、概率档为保守估计（待补近3年数据）';
+    rankPart = '缺历史数据、概率档为保守估计（待补近3年数据）';
+  } else if (method === PROB_METHOD_SCORE) {
+    const sign = diff > 0 ? '+' : '';
+    const tail = tier === '差距过大' ? '、差距过大不推荐' : '';
+    rankPart = `投档分差 ${sign}${diff}（归「${tier}」${tail}，位次待一分一段表派生）`;
   } else {
     const sign = diff > 0 ? '+' : '';
     const tail = tier === '差距过大' ? '、差距过大不推荐' : '';
     rankPart = `位次差 ${sign}${diff}（归「${tier}」${tail}）`;
   }
-  return `${head}：${rankPart}；${describeSubject(card, candidate)}；${describeBudget(card, candidate)}。（${PROB_METHOD}，参考 ${dataYears}，非录取预测）`;
+  return `${head}：${rankPart}；${describeSubject(card, candidate)}；${describeBudget(card, candidate)}。（${method}，参考 ${dataYears}，非录取预测）`;
 }
 
 // ============================================================================
