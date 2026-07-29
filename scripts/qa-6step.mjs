@@ -52,7 +52,7 @@ console.log(`QA 6 步回归 · 目标服务 ${BASE}（端到端只跑一个服�
 console.log(`数据源 data/sample（${candidates.length} 卡，与运行时同源）`);
 
 // 03 资格校验 ----------------------------------------------------------------
-step('03', '资格校验 POST /api/eligibility（4 类规则真判定 · 8 卡全样）');
+step('03', '资格校验 POST /api/eligibility（4 类规则真判定 · per-card 选科 · 数据感知）');
 {
   const { status, json } = await post('/api/eligibility', { candidate, candidates, rules });
   assert(status === 200, `HTTP 200（实际 ${status}）`);
@@ -60,7 +60,14 @@ step('03', '资格校验 POST /api/eligibility（4 类规则真判定 · 8 卡�
   assert(json.outcome?.status === 'ok' || json.outcome?.status === 'needs_manual_review',
     `outcome 为 ok/needs_manual_review（实际 ${json.outcome?.status}）`);
   const passed = (json.data ?? []).filter((r) => r.passed);
-  assert(passed.length === candidates.length, `${candidates.length} 个候选全通过资格（实际 ${passed.length}）`);
+  // 数据感知：物理类考生只匹配物理类卡（历史类被 per-card subject 过滤）；通过数=物理类卡数
+  const expectedPassed = candidates.filter((c) => (c.major_group.subject_requirement || '').startsWith('物理')).length;
+  const histLeaked = passed.some((r) => {
+    const card = candidates.find((c) => c.id === r.candidate_id);
+    return (card?.major_group.subject_requirement || '').startsWith('历史');
+  });
+  assert(!histLeaked, `历史类卡被 per-card subject 正确过滤（不进 passed）`);
+  assert(passed.length === expectedPassed, `通过数=物理类卡数 ${expectedPassed}（实际 ${passed.length}）`);
   // 真实规则调用：首卡(SEU-06，字段齐全) batch/tuition_le/plan_gt 不落 default
   const sample0 = (json.data ?? []).find((r) => r.candidate_id === 'SEU-06');
   const blockingCount = sample0?.evaluated_rules?.filter((e) => e.blocking)?.length ?? 0;
@@ -75,11 +82,20 @@ step('03b', '选科维度：物理+生物考生 → 只命中「物理(再选不
   const { status, json } = await post('/api/eligibility', { candidate: bioCandidate, candidates, rules });
   assert(status === 200, `HTTP 200（实际 ${status}）`);
   const passed = (json.data ?? []).filter((r) => r.passed);
-  assert(passed.length === 1, `仅 1 个候选通过（未选化学，只 物理-不限 组可报；实际 ${passed.length}）`);
-  assert(passed[0]?.candidate_id === 'SEU-07', `通过的是 SEU-07（物理+不限），实际 ${passed[0]?.candidate_id}`);
-  const chemFailed = ['SEU-06', 'SEU-08', 'NJUST-03', 'HHU-05', 'NJU-07', 'NJU-09', 'NJUPT-05']
-    .every((id) => !(json.data ?? []).find((r) => r.candidate_id === id)?.passed);
-  assert(chemFailed, '7 个 物理+化学 组全部因缺化学被过滤（per-card subject 生效）');
+  // 数据感知：物理+生物考生只命中「物理(再选不限)」组(物理/物理+不限)，物理+化学组被过滤
+  const expectedBio = candidates
+    .filter((c) => {
+      const r = (c.major_group.subject_requirement || '').split('+').map((s) => s.trim());
+      if (r[0] !== '物理') return false;
+      const sec = r.slice(1);
+      return sec.length === 0 || sec.includes('不限');
+    })
+    .map((c) => c.id);
+  assert(passed.length === expectedBio.length, `通过数=物理(再选不限)组数 ${expectedBio.length}（实际 ${passed.length}）`);
+  assert(expectedBio.every((id) => passed.find((r) => r.candidate_id === id)), `通过的恰为物理(再选不限)组：${expectedBio.join('/')}`);
+  const chemCards = candidates.filter((c) => (c.major_group.subject_requirement || '').split('+').map((s) => s.trim()).includes('化学')).map((c) => c.id);
+  const chemFailed = chemCards.every((id) => !(json.data ?? []).find((r) => r.candidate_id === id)?.passed);
+  assert(chemFailed, `${chemCards.length} 个 物理+化学 组全部因缺化学被过滤（per-card subject 生效）`);
 }
 
 // 04 方案比较 ----------------------------------------------------------------
