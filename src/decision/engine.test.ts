@@ -270,6 +270,42 @@ describe('rankCandidates · strategy sort', () => {
 });
 
 // ===========================================================================
+// 4b. rankCandidates · 多因素推荐理由（maozh2 seq322/325：位次+选科+预算+年份trace）
+// ===========================================================================
+
+describe('rankCandidates · 多因素推荐理由', () => {
+  it('reason 同时含位次+选科+预算+年份trace+非预测声明', () => {
+    const c = candidate({ budget: { maxTuition: 6000 } });
+    const r = rankCandidates([makeCard({ id: 'A' })], c, '均衡')[0];
+    expect(r.reason).toContain('位次差');
+    expect(r.reason).toContain('选科');
+    expect(r.reason).toContain('预算');
+    expect(r.reason).toMatch(/参考 \d{4}/); // 年份 trace
+    expect(r.reason).toContain('非录取预测');
+  });
+  it('选科不符合 → reason 标硬过滤', () => {
+    const card = makeCard({ id: 'A', major_group: { group_no: '01', subject_requirement: '物理+生物' } });
+    const r = rankCandidates([card], candidate(), '均衡')[0]; // 考生物理+化学
+    expect(r.reason).toContain('不符合');
+  });
+  it('预算超限 → reason 标超预算', () => {
+    const c = candidate({ budget: { maxTuition: 4000 } });
+    const r = rankCandidates([makeCard({ id: 'A' })], c, '均衡')[0]; // 学费 5000
+    expect(r.reason).toContain('超预算');
+  });
+  it('学费待核(null) → reason 标学费待核', () => {
+    const card = makeCard({ id: 'A', recruitment: { plan: 10, duration: 4, tuition: null } });
+    const r = rankCandidates([card], candidate(), '均衡')[0];
+    expect(r.reason).toContain('学费待核');
+  });
+  it('选科要求未标注 → reason 标待核', () => {
+    const card = makeCard({ id: 'A', major_group: { group_no: '01', subject_requirement: '' } });
+    const r = rankCandidates([card], candidate(), '均衡')[0];
+    expect(r.reason).toContain('选科要求未标注');
+  });
+});
+
+// ===========================================================================
 // 5. recompute + 版本差异
 // ===========================================================================
 
