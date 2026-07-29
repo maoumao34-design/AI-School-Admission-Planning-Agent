@@ -16,8 +16,10 @@ type Msg = { role: "user" | "agent"; text: string };
 
 export default function ChatPanel({
   onReady,
+  onConditionUpdate,
 }: {
   onReady?: (c: CandidateConditions) => void;
+  onConditionUpdate?: (c: Partial<CandidateConditions>) => void;
 }) {
   const [messages, setMessages] = useState<Msg[]>([
     {
@@ -62,6 +64,7 @@ export default function ChatPanel({
     nextMessages.push({ role: "agent", text: agentText });
     setMessages(nextMessages);
     setConditions(updated);
+    onConditionUpdate?.(updated);
     setBusy(false);
     if (ready && isComplete(updated) && onReady) onReady(updated as CandidateConditions);
   }
