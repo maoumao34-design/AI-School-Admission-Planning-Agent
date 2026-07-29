@@ -7,11 +7,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyChanges,
+  buildConditionConversation,
   checkEligibility,
   checkEligibilityPerCardSubject,
   compareFiltered,
   evaluateRule,
+  extractConditions,
   findConditionErrors,
+  findConflicts,
   findMissingConditions,
   probabilityRef,
   rankCandidates,
@@ -365,5 +368,73 @@ describe('compareFiltered · per-card 选科过滤 + 差距过大分离', () => 
     const mainIds = res.groups.flatMap((g) => g.candidates.map((c) => c.id));
     expect(mainIds).not.toContain('D-reach'); // 5200-2000=+3200 → 差距过大
     expect(res.out_of_reach.map((c) => c.id)).toContain('D-reach');
+  });
+});
+
+// ===========================================================================
+// 对话建立条件（步骤 01）：抽取 / 缺失 / 冲突 / 追问（确定性，不依赖 LLM）
+// ===========================================================================
+describe('extractConditions · 自然语言抽取', () => {
+  it('一句话抽多字段：省份/年度/分数/位次/选科', () => {
+    const r = extractConditions('我是江苏的，2026年考了637分，位次5200，选物理加化学', {});
+    expect(r.province).toBe('江苏');
+    expect(r.year).toBe(2026);
+    expect(r.score).toBe(637);
+    expect(r.rank).toBe(5200);
+    expect(r.subject?.primary).toBe('物理');
+    expect(r.subject?.secondary).toContain('化学');
+  });
+  it('历史类考生', () => {
+    const r = extractConditions('我选历史，再选政治和地理', {});
+    expect(r.subject?.category).toBe('历史类');
+    expect(r.subject?.primary).toBe('历史');
+    expect(r.subject?.secondary).toEqual(expect.arrayContaining(['政治', '地理']));
+  });
+  it('已填字段不被覆盖', () => {
+    const r = extractConditions('我考了700分', { score: 637 });
+    expect(r.score).toBe(637); // 已有 637 不被本轮 700 覆盖
+  });
+});
+
+describe('findConflicts · 冲突检测', () => {
+  it('首选同时出现在再选 → 冲突', () => {
+    const g = findConflicts({ subject: { category: '物理类', primary: '物理', secondary: ['物理', '化学'] as never } });
+    expect(g.some((x) => x.message.includes('不能同时作为再选'))).toBe(true);
+  });
+  it('类别与首选不一致 → 冲突', () => {
+    const g = findConflicts({ subject: { category: '历史类', primary: '物理', secondary: [] } });
+    expect(g.some((x) => x.message.includes('不一致'))).toBe(true);
+  });
+  it('分数越界 → 冲突', () => {
+    const g = findConflicts({ score: 900 });
+    expect(g.some((x) => x.message.includes('越界'))).toBe(true);
+  });
+  it('无冲突 → 空', () => {
+    expect(findConflicts({ subject: { category: '物理类', primary: '物理', secondary: ['化学', '生物'] }, score: 637, rank: 5200 })).toEqual([]);
+  });
+});
+
+describe('buildConditionConversation · 多轮追问', () => {
+  it('首轮空 → missing 全部、追问省份、ready=false', () => {
+    const r = buildConditionConversation({ message: '我想规划高考志愿', conditions: {} });
+    expect(r.missing).toEqual(expect.arrayContaining(['省份', '年度', '选科', '分数', '位次']));
+    expect(r.ready).toBe(false);
+    expect(r.next_question).toContain('省份');
+  });
+  it('逐步补全 → ready=true', () => {
+    let r = buildConditionConversation({ message: '我是江苏的，2026年', conditions: {} });
+    expect(r.conditions.province).toBe('江苏');
+    r = buildConditionConversation({ message: '637分，位次5200', conditions: r.conditions });
+    r = buildConditionConversation({ message: '选物理和化学', conditions: r.conditions });
+    expect(r.missing).toEqual([]);
+    expect(r.conflicts).toEqual([]);
+    expect(r.ready).toBe(true);
+    expect(r.reply).toContain('齐全');
+  });
+  it('冲突输入 → conflicts 非空、reply 提示修正', () => {
+    const r = buildConditionConversation({ message: '我选历史类但首选物理', conditions: {} });
+    expect(r.conflicts.length).toBeGreaterThan(0);
+    expect(r.ready).toBe(false);
+    expect(r.reply).toContain('冲突');
   });
 });
