@@ -7,6 +7,7 @@
  */
 
 import {
+  buildConditionConversation,
   buildTrace,
   checkEligibilityPerCardSubject,
   compareFiltered,
@@ -24,6 +25,8 @@ import type {
   CandidateConditions,
   ComparisonRequest,
   ComparisonResult,
+  ConditionBuildingRequest,
+  ConditionBuildingResult,
   Dataset,
   DecisionResponse,
   EligibilityCheckRequest,
@@ -202,4 +205,17 @@ export function handleRecompute(
   if (result.diff.changed.length) diffParts.push(`档位变化 ${result.diff.changed.length}`);
   const reason = diffParts.length ? `重算完成：${diffParts.join('、')}` : '重算完成：候选集合未变';
   return respond(ok(reason), trace, result);
+}
+
+// ----------------------------------------------------------------------------
+// 4. 对话建立条件（步骤 01）：自然语言 → 抽取/缺失/冲突/追问（确定性引擎）
+//    红线：本阶段不调资格/比较规则；ready=true 后由前端走 /api/eligibility + /api/compare。
+// ----------------------------------------------------------------------------
+
+export function handleConditionBuilding(
+  req: ConditionBuildingRequest,
+): ConditionBuildingResult {
+  const message = typeof req?.message === 'string' ? req.message : '';
+  const conditions = (req?.conditions ?? {}) as Partial<CandidateConditions>;
+  return buildConditionConversation({ message, conditions, history: req?.history });
 }

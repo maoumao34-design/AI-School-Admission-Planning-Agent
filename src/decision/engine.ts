@@ -17,6 +17,9 @@ import type {
   CandidateCard,
   CandidateConditions,
   ComparisonResult,
+  ConditionBuildingRequest,
+  ConditionBuildingResult,
+  ConditionGap,
   Dataset,
   DecisionResponse,
   DecisionTrace,
@@ -31,6 +34,7 @@ import type {
   RecomputeResponse,
   Rule,
   RuleEvaluation,
+  SecondarySubject,
   Strategy,
   StrategyGroup,
   VersionDiff,
@@ -511,6 +515,140 @@ export function findConditionErrors(candidate: Partial<CandidateConditions> | un
     return [`再选科目最多 ${SECONDARY_MAX} 门，当前 ${candidate.subject.secondary.length} 门（请去掉超出的科目）`];
   }
   return [];
+}
+
+// ============================================================================
+// 7. 对话建立条件（步骤 01）：自然语言 → 抽取/缺失/冲突/追问（确定性，不依赖 LLM）
+//    红线：本模块只做「建条件 + 追问 + 标冲突」；资格判定/方案比较仍走确定性规则引擎。
+//    LLM 仅作可选增强（自然语言理解/回复润色）；无 provider 时模板兜底，保证功能可用。
+// ============================================================================
+
+const KNOWN_PROVINCES = [
+  '江苏', '浙江', '上海', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南',
+  '广东', '北京', '天津', '河北', '山西', '四川', '重庆', '陕西',
+];
+const RESELECT_SUBJECTS = ['化学', '生物', '政治', '地理'] as const;
+
+/**
+ * 从用户自然语言抽取已知条件，合并进 current（已填字段不覆盖，本轮明确提到的选科增量合并）。
+ * 确定性正则抽取；LLM 增强可替换/补充本函数。
+ */
+export function extractConditions(
+  message: string,
+  current: Partial<CandidateConditions>,
+): Partial<CandidateConditions> {
+  const text = (message ?? '').replace(/\s+/g, '');
+  const next: Partial<CandidateConditions> = { ...current };
+
+  if (!next.province) {
+    const p = KNOWN_PROVINCES.find((x) => text.includes(x));
+    if (p) next.province = p;
+  }
+  if (next.year == null) {
+    const m = text.match(/(20\d{2})年?/);
+    if (m) next.year = Number(m[1]);
+  }
+  if (next.score == null) {
+    const m = text.match(/(\d{2,3})分/);
+    if (m) next.score = Number(m[1]);
+  }
+  if (next.rank == null) {
+    const m = text.match(/(?:位次|排名|名次|第)(\d{2,6})|(\d{2,6})(?:位|名)/);
+    if (m) next.rank = Number(m[1] ?? m[2]);
+  }
+
+  // 类别与首选分别检测（用户输入矛盾时保留，交 findConflicts 标记）
+  const catWuli = /物理类/.test(text);
+  const catLishi = /历史类/.test(text);
+  const priWuli = /(?:选|首选)物理/.test(text);
+  const priLishi = /(?:选|首选)历史/.test(text);
+  const baseSubj = next.subject ? { ...next.subject } : undefined;
+  const category = baseSubj?.category ?? (catWuli ? '物理类' : catLishi ? '历史类' : undefined);
+  const primary = baseSubj?.primary ?? (priWuli ? '物理' : priLishi ? '历史' : undefined);
+  if (category || primary) {
+    next.subject = {
+      category: category ?? (primary === '物理' ? '物理类' : '历史类'),
+      primary: primary ?? (category === '物理类' ? '物理' : '历史'),
+      secondary: baseSubj?.secondary ?? [],
+    };
+  }
+  // 再选：本轮提到的增量合并（去重，排除首选）
+  if (next.subject) {
+    const found = RESELECT_SUBJECTS.filter((s) => text.includes(s)); // RESELECT 已不含首选(物/历)，无需排除
+    if (found.length) {
+      const merged = Array.from(new Set([...(next.subject.secondary ?? []), ...found]));
+      next.subject = { ...next.subject, secondary: merged as SecondarySubject[] };
+    }
+  }
+  return next;
+}
+
+/**
+ * 条件冲突检测：选科类别/首选·再选一致性、再选重复、分数位次越界。
+ * 返回 ConditionGap[]（status='conflict'）；不阻断，交给对话层提示用户修正。
+ */
+export function findConflicts(conditions: Partial<CandidateConditions> | undefined): ConditionGap[] {
+  const gaps: ConditionGap[] = [];
+  const subj = conditions?.subject;
+  if (subj) {
+    const sec = (subj.secondary ?? []) as readonly string[];
+    if (subj.primary && sec.includes(subj.primary)) {
+      gaps.push({ field: 'subject', status: 'conflict', message: `首选「${subj.primary}」不能同时作为再选科目` });
+    }
+    if (subj.category && subj.primary && (subj.category === '物理类') !== (subj.primary === '物理')) {
+      gaps.push({ field: 'subject.category', status: 'conflict', message: `选科类别「${subj.category}」与首选「${subj.primary}」不一致` });
+    }
+    if (subj.secondary && new Set(subj.secondary).size !== subj.secondary.length) {
+      gaps.push({ field: 'subject.secondary', status: 'conflict', message: '再选科目有重复' });
+    }
+  }
+  if (conditions?.score != null && (conditions.score < 0 || conditions.score > 750)) {
+    gaps.push({ field: 'score', status: 'conflict', message: `分数 ${conditions.score} 越界（合理范围 0–750）` });
+  }
+  if (conditions?.rank != null && conditions.rank <= 0) {
+    gaps.push({ field: 'rank', status: 'conflict', message: '位次必须为正数' });
+  }
+  return gaps;
+}
+
+const ASK_FOR: Record<string, string> = {
+  省份: '你是哪个省份的考生？',
+  年度: '要规划哪个招生年度（如 2026）？',
+  选科: '你的选科组合？首选 物理还是历史，再选哪几门（化/生/政/地）',
+  分数: '你的高考分数是多少？',
+  位次: '你的全省位次（排名）是多少？',
+};
+
+/**
+ * 对话建立条件主函数（确定性）：抽取 → 缺失 → 冲突 → 追问决策 → Agent 回复。
+ * 输出「回复 + 更新的条件 state + 缺失/冲突 + 下一步问题」；ready=true 时可进资格校验。
+ */
+export function buildConditionConversation(req: ConditionBuildingRequest): ConditionBuildingResult {
+  const merged = extractConditions(req.message, req.conditions ?? {});
+  const missing = findMissingConditions(merged);
+  const conflicts = findConflicts(merged);
+  const ready = missing.length === 0 && conflicts.length === 0;
+
+  const filled = REQUIRED_FIELDS.filter((f) => {
+    const v = merged[f.key];
+    return !(v === undefined || v === null || v === '');
+  }).map((f) => f.label);
+
+  let reply: string;
+  let nextQuestion: string | undefined;
+  if (conflicts.length) {
+    nextQuestion = conflicts[0].message;
+    reply =
+      `核对一下，发现 ${conflicts.length} 处冲突：\n` +
+      `${conflicts.map((c) => `- ${c.message}`).join('\n')}\n请修正后再继续。`;
+  } else if (missing.length) {
+    nextQuestion = ASK_FOR[missing[0]] ?? `请补充「${missing[0]}」`;
+    reply = `已记录：${filled.length ? filled.join('、') : '（暂无）'}。还缺 ${missing.join('、')}。先回答：${nextQuestion}`;
+  } else {
+    reply = '条件已齐全、无冲突，可以开始资格校验和方案比较了。';
+  }
+
+  return { reply, conditions: merged, filled_fields: filled, missing, conflicts, ready, next_question: nextQuestion };
 }
 
 export function buildTrace(

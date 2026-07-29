@@ -293,3 +293,30 @@ export interface Dataset {
   rules: Rule[];
   meta?: unknown;
 }
+
+// ============================================================================
+// 7. 对话建立条件（步骤 01）：自然语言 → 抽取/缺失/冲突/追问
+//    红线：本模块只做「建条件 + 追问 + 标冲突」；资格判定仍走确定性规则引擎。
+//    LLM 仅作可选增强（理解/润色）；无 provider 时模板兜底，保证功能可用。
+// ============================================================================
+
+export interface ConditionTurn {
+  role: 'user' | 'agent';
+  content: string;
+}
+
+export interface ConditionBuildingRequest {
+  message: string; // 用户本轮自然语言
+  conditions: Partial<CandidateConditions>; // 已采集条件 state（首轮可空对象）
+  history?: ConditionTurn[]; // 可选对话历史（LLM 增强用）
+}
+
+export interface ConditionBuildingResult {
+  reply: string; // Agent 回复（追问缺失 / 提示冲突 / 确认可进资格校验）
+  conditions: Partial<CandidateConditions>; // 更新后的条件（缺失字段仍 undefined）
+  filled_fields: string[]; // 已填字段标签
+  missing: string[]; // 缺失项（findMissingConditions）
+  conflicts: ConditionGap[]; // 冲突项
+  ready: boolean; // 缺失与冲突均空 → 可进资格校验/方案比较
+  next_question?: string; // 下一步该问的（missing[0] 或冲突提示）
+}
