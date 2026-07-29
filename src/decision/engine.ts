@@ -279,7 +279,7 @@ export function rankCandidates(
       ...card,
       rank_diff_vs_candidate: diff,
       probability_ref,
-      reason: buildReason(card, diff, probability_ref.tier),
+      reason: buildReason(card, candidate, diff, probability_ref.tier, dataYears),
     };
   });
   return ranked.sort((a, b) => sortByStrategy(strategy, a, b));
@@ -386,17 +386,46 @@ export function compareFiltered(
   };
 }
 
-function buildReason(card: CandidateCard, diff: number, tier: ProbabilityTier): string {
+/** 选科维度说明：要求 vs 考生 → 符合/不符合（硬过滤）。 */
+function describeSubject(card: CandidateCard, candidate: CandidateConditions): string {
+  const req = card.major_group.subject_requirement?.trim();
+  const cand = `${candidate.subject.primary}+${candidate.subject.secondary.join('+')}`;
+  if (!req) return `选科要求未标注（考生 ${cand}，待核）`;
+  const ok = cardSubjectOk(card, candidate);
+  return `选科「${req}」vs 考生「${cand}」→ ${ok ? '符合' : '不符合（硬过滤）'}`;
+}
+
+/** 预算维度说明：学费 vs 预算上限 → 符合/超预算/待核。 */
+function describeBudget(card: CandidateCard, candidate: CandidateConditions): string {
+  const tuition = card.recruitment.tuition;
+  const max = candidate.budget?.maxTuition;
+  if (tuition == null) return `学费待核`;
+  if (max == null) return `学费 ${tuition}（未设预算上限）`;
+  const ok = tuition <= max;
+  return `学费 ${tuition} ${ok ? '≤' : '>'} 预算 ${max} → ${ok ? '符合' : '超预算'}`;
+}
+
+/**
+ * 推荐理由：同时说明位次 + 选科 + 预算三因素 + 数据年份 trace（maozh2 seq322/325）。
+ * 红线：标注方法 + 数据年份，非录取预测；单年/缺数据标待核。
+ */
+function buildReason(
+  card: CandidateCard,
+  candidate: CandidateConditions,
+  diff: number,
+  tier: ProbabilityTier,
+  dataYears: string,
+): string {
+  const head = `${card.school.name} ${card.major_group.group_no}组`;
+  let rankPart: string;
   if (!Number.isFinite(diff)) {
-    return `${card.school.name} ${card.major_group.group_no}组：缺历史位次数据，概率档为保守估计（${PROB_METHOD}），需补近3年数据。`;
+    rankPart = '缺历史位次数据、概率档为保守估计（待补近3年数据）';
+  } else {
+    const sign = diff > 0 ? '+' : '';
+    const tail = tier === '差距过大' ? '、差距过大不推荐' : '';
+    rankPart = `位次差 ${sign}${diff}（归「${tier}」${tail}）`;
   }
-  const sign = diff > 0 ? '+' : '';
-  const tail = tier === '差距过大' ? '，差距过大，不推荐' : '';
-  return (
-    `${card.school.name} ${card.major_group.group_no}组：` +
-    `考生位次相对该组最近年投档线位次差 ${sign}${diff}，归为「${tier}」` +
-    `（${PROB_METHOD}，参考用，非录取预测）${tail}。`
-  );
+  return `${head}：${rankPart}；${describeSubject(card, candidate)}；${describeBudget(card, candidate)}。（${PROB_METHOD}，参考 ${dataYears}，非录取预测）`;
 }
 
 // ============================================================================
