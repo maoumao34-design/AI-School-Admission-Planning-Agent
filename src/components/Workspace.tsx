@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CandidateCard as CandidateCardDTO,
   CandidateConditions,
@@ -18,7 +18,7 @@ import rulesData from "../../data/rules.example.json";
 import CandidateCard from "./CandidateCard";
 import ChatPanel from "./ChatPanel";
 import ConditionForm from "./ConditionForm";
-import ProfilePanel, { type PlannerProfile } from "./ProfilePanel";
+import ProfilePanel, { type PlannerProfile, type ProfilePanelHandle } from "./ProfilePanel";
 
 type Status = "loading" | "error" | "ready";
 type StrategyKey = Extract<Strategy, "院校优先" | "专业优先">;
@@ -35,6 +35,7 @@ export default function Workspace() {
   const [strategy, setStrategy] = useState<StrategyKey>("院校优先");
   const [activeProfileId, setActiveProfileId] = useState("");
   const [profiles, setProfiles] = useState<PlannerProfile[]>([]);
+  const profileRef = useRef<ProfilePanelHandle>(null);
   const [condMode, setCondMode] = useState<"form" | "chat">("form");
 
   const [status, setStatus] = useState<Status>("loading");
@@ -87,6 +88,7 @@ export default function Workspace() {
       {/* 左：登录/多档案 + 建条件（步骤 01） */}
       <div className="flex min-h-[320px] flex-col gap-3 lg:min-h-0">
         <ProfilePanel
+          ref={profileRef}
           candidate={candidate}
           activeProfileId={activeProfileId}
           onActiveProfileChange={handleActiveProfileChange}
@@ -109,7 +111,12 @@ export default function Workspace() {
             {condMode === "form" ? (
               <ConditionForm value={candidate} onChange={setCandidate} />
             ) : (
-              <ChatPanel onReady={setCandidate} />
+              <ChatPanel
+                onReady={(c) => {
+                  setCandidate(c);
+                  profileRef.current?.addProfileFromConditions(c);
+                }}
+              />
             )}
           </div>
         </div>
