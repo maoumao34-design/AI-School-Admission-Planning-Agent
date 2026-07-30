@@ -2,7 +2,7 @@
 
 方向 05 · 决策型 Agent。本项目选定场景：**高考志愿规划**。
 
-> 🌐 **Live**：<https://ai-school-admission-planning-agent.vercel.app/> · 仓库：[GitHub](https://github.com/maoumao34-design/AI-School-Admission-Planning-Agent)
+> 🌐 **Live**：<https://ai-school-admission-planning-agent.vercel.app/> · 📦 **完整源代码 + README 已提交**：[GitHub 仓库](https://github.com/maoumao34-design/AI-School-Admission-Planning-Agent)
 >
 > 核心流程（资格校验 / 方案比较 / 改条件重算）**只依赖 JSON 数据 + 纯函数引擎，零环境变量即可部署**；
 > Supabase（登录/数据隔离）是增强项，可后置。部署步骤见下方[「部署 (Vercel)」](#部署-vercel)。
