@@ -28,13 +28,17 @@ const INITIAL_CANDIDATE: CandidateConditions = {
   rank: 5200,
 };
 
-const DISPLAY_LIMITS: Record<Extract<ProbabilityTier, "稳妥" | "保底" | "冲刺">, number> = {
+type DisplayTier = Extract<ProbabilityTier, "稳妥" | "保底" | "冲刺">;
+
+const DISPLAY_LIMITS: Record<DisplayTier, number> = {
   稳妥: 12,
   保底: 12,
   冲刺: 6,
 };
-const TIER_ORDER: Array<Extract<ProbabilityTier, "稳妥" | "保底" | "冲刺">> = ["稳妥", "保底", "冲刺"];
+const TIER_ORDER: DisplayTier[] = ["稳妥", "保底", "冲刺"];
 const FILTER_SAMPLE_LIMIT = 10;
+const TIER_MORE_STEP = 10;
+const TIER_MAX_LIMIT = 30;
 
 async function postDecision<T>(url: string, body: unknown): Promise<DecisionResponse<T>> {
   const res = await fetch(url, {
@@ -50,11 +54,17 @@ async function postDecision<T>(url: string, body: unknown): Promise<DecisionResp
   return (await res.json()) as DecisionResponse<T>;
 }
 
-function tierBuckets(candidates: RankedCandidate[]) {
+function tierBuckets(candidates: RankedCandidate[], limits: Record<DisplayTier, number> = DISPLAY_LIMITS) {
   return TIER_ORDER.map((tier) => {
     const all = candidates.filter((c) => c.probability_ref.tier === tier);
-    return { tier, total: all.length, candidates: all.slice(0, DISPLAY_LIMITS[tier]) };
+    const visibleLimit = Math.min(limits[tier], TIER_MAX_LIMIT);
+    const visible = all.slice(0, visibleLimit);
+    return { tier, total: all.length, visibleLimit, candidates: visible, hidden: Math.max(0, all.length - visible.length) };
   });
+}
+
+function defaultTopCandidates(candidates: RankedCandidate[]) {
+  return tierBuckets(candidates).flatMap((bucket) => bucket.candidates);
 }
 
 /** 工作区：建条件(form) → 资格过滤 → 方案比较 → 改条件随动重算 → 确认导出（6 步端到端可演示）。
@@ -173,12 +183,12 @@ export default function Workspace() {
           </span>
           <button
             type="button"
-            onClick={() => exportReport(candidate, strategy, group, outOfReach, eligPassed, eligResults.length, compare?.trace)}
+            onClick={() => exportReport(candidate, strategy, group, outOfReach, eligPassed, eligResults.length, eligResults, compare?.trace)}
             className="ml-auto rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
             disabled={!group || group.candidates.length === 0}
-            title="确认方案并导出（步骤 06）"
+            title="确认并导出默认 Top30 + 过滤统计（步骤 06）"
           >
-            确认 · 导出方案
+            确认 · 导出Top30
           </button>
         </div>
 
@@ -222,6 +232,11 @@ function ReadyView({
   elig: EligibilityResult[];
 }) {
   const { outcome, trace } = compare;
+  const [visibleLimits, setVisibleLimits] = useState<Record<DisplayTier, number>>({ ...DISPLAY_LIMITS });
+
+  useEffect(() => {
+    setVisibleLimits({ ...DISPLAY_LIMITS });
+  }, [strategy, trace.generated_at]);
 
   // 异常路径：信息不足 / 无结果 / 需人工复核。差距过大另列，不再误判为主列表候选。
   if (outcome.status !== "ok" || !group || (group.candidates.length === 0 && outOfReach.length === 0)) {
@@ -242,7 +257,8 @@ function ReadyView({
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
         <span className="font-medium text-slate-700">资格过滤</span>
         <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">{eligPassed}/{eligTotal} 候选通过硬条件</span>
-        <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">主推荐 {group.candidates.length}</span>
+        <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">主推荐候选池 {group.candidates.length}</span>
+        <span className="rounded bg-indigo-50 px-2 py-0.5 text-indigo-700">默认主列表 Top30=稳12/保12/冲6</span>
         <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">不推荐折叠 {outOfReach.length}</span>
         <details className="ml-1">
           <summary className="cursor-pointer text-slate-500">逐条规则</summary>
@@ -263,7 +279,7 @@ function ReadyView({
       {groups.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
           {groups.map((g) => {
-            const buckets = tierBuckets(g.candidates);
+            const buckets = tierBuckets(g.candidates, visibleLimits);
             const shown = buckets.reduce((sum, b) => sum + b.candidates.length, 0);
             return (
               <div
@@ -272,8 +288,9 @@ function ReadyView({
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
                   <span className="font-medium text-slate-700">{g.strategy}</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">默认展示 {shown}/30</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">当前展示 {shown}</span>
                   <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">总可推荐 {g.candidates.length}</span>
+                  <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-700">默认 Top30=稳12/保12/冲6</span>
                   {g.strategy === strategy && <span className="text-indigo-500">· 当前选中</span>}
                 </div>
                 {g.candidates.length > 0 ? (
@@ -284,12 +301,30 @@ function ReadyView({
                           <span className="font-medium">{b.tier}</span>
                           <span className="rounded bg-slate-100 px-1.5 py-0.5">展示 {b.candidates.length}/{b.total}</span>
                           {b.total === 0 && <span className="text-amber-600">本档可推荐不足，不硬凑</span>}
+                          {b.hidden > 0 && <span className="text-slate-400">仍折叠 {b.hidden} 个</span>}
                         </div>
                         <div className="grid grid-cols-1 gap-3">
                           {b.candidates.map((c) => (
                             <CandidateCard key={c.id} card={c} />
                           ))}
                         </div>
+                        {b.candidates.length < b.total && b.candidates.length < TIER_MAX_LIMIT && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVisibleLimits((prev) => ({
+                                ...prev,
+                                [b.tier]: Math.min(TIER_MAX_LIMIT, prev[b.tier] + TIER_MORE_STEP),
+                              }))
+                            }
+                            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                          >
+                            查看更多{b.tier} +{Math.min(TIER_MORE_STEP, b.total - b.candidates.length, TIER_MAX_LIMIT - b.candidates.length)}（最多30/档）
+                          </button>
+                        )}
+                        {b.total > TIER_MAX_LIMIT && b.candidates.length >= TIER_MAX_LIMIT && (
+                          <p className="text-xs text-slate-400">已达每档最多 30 个展示上限，剩余候选继续折叠。</p>
+                        )}
                       </section>
                     ))}
                   </div>
@@ -374,10 +409,16 @@ function exportReport(
   outOfReach: RankedCandidate[],
   eligPassed: number,
   eligTotal: number,
+  elig: EligibilityResult[],
   trace: DecisionResponse<unknown>["trace"] | undefined,
 ) {
   if (!group) return;
   const when = new Date().toLocaleString("zh-CN");
+  const buckets = tierBuckets(group.candidates);
+  const topCandidates = defaultTopCandidates(group.candidates);
+  const blocked = elig.filter((r) => !r.passed);
+  const blockingSamples = blocked.slice(0, FILTER_SAMPLE_LIMIT);
+  const outOfReachSamples = outOfReach.slice(0, FILTER_SAMPLE_LIMIT);
   const lines: string[] = [];
   lines.push(`# 升学规划方案（${candidate.province} · ${candidate.year}）`);
   lines.push("");
@@ -391,12 +432,17 @@ function exportReport(
   lines.push(`- 分数/位次：${candidate.score} / ${candidate.rank.toLocaleString()}`);
   if (candidate.budget?.maxTuition) lines.push(`- 学费预算上限：¥${candidate.budget.maxTuition}/年`);
   lines.push("");
-  lines.push("## 资格过滤");
-  lines.push(`- ${eligPassed}/${eligTotal} 候选通过硬条件规则（选科/批次/费用/计划）`);
-  lines.push(`- 差距过大不推荐候选：${outOfReach.length} 个，未进入主推荐列表`);
+  lines.push("## 资格过滤与展示统计");
+  lines.push(`- ${eligPassed}/${eligTotal} 候选通过硬条件规则（选科/批次/费用/计划），未通过 ${blocked.length} 个。`);
+  lines.push(`- 主推荐候选池：${group.candidates.length} 个；默认导出/主列表 Top30 口径=稳12/保12/冲6，实际导出 ${topCandidates.length} 个（不足不硬凑）。`);
+  buckets.forEach((b) => lines.push(`- ${b.tier}：导出 ${b.candidates.length}/${b.total} 个；页面可“查看更多”每次 +10，最多 30/档。`));
+  lines.push(`- 差距过大不推荐候选：${outOfReach.length} 个，未进入主推荐列表；导出仅保留最多 ${FILTER_SAMPLE_LIMIT} 个原因样例。`);
+  if (blockingSamples.length) {
+    lines.push(`- 硬条件未通过样例（最多 ${FILTER_SAMPLE_LIMIT} 条）：${blockingSamples.map((r) => `${r.candidate_id}:${r.blocking_rules.map((b) => b.rule_id).join("/") || "未通过"}`).join("；")}`);
+  }
   lines.push("");
-  lines.push(`## 方案：${strategy}`);
-  group.candidates.forEach((c, i) => {
+  lines.push(`## 方案：${strategy}（默认 Top30）`);
+  topCandidates.forEach((c, i) => {
     lines.push(`${i + 1}. **${c.school.name} ${c.major_group.group_no}组**（${c.school.code ?? "—"}）— ${c.probability_ref.tier}（${c.probability_ref.pct_ref_band ?? ""}）`);
     lines.push(`   - 位次差(考生−校线)：${c.rank_diff_vs_candidate.toLocaleString()}（正=冲、负=稳/保）`);
     lines.push(`   - 选科：${c.major_group.subject_requirement} · 学制${c.recruitment.duration}年 · 学费¥${c.recruitment.tuition ?? "—"}/年`);
@@ -404,10 +450,11 @@ function exportReport(
     lines.push(`   - 官方来源：${c.source.url} （${c.source.publisher ?? ""}，更新 ${c.source.updated ?? "—"}）`);
     if (c.caveats && c.caveats.length) lines.push(`   - 提示：${c.caveats.join("；")}`);
   });
-  if (outOfReach.length) {
+  if (outOfReachSamples.length) {
     lines.push("");
-    lines.push("## 不推荐（差距过大，透明保留）");
-    outOfReach.forEach((c) => lines.push(`- ${c.school.name} ${c.major_group.group_no}组：${c.rank_diff_vs_candidate.toLocaleString()} 位次差，${c.source.url}`));
+    lines.push(`## 不推荐原因样例（差距过大，最多 ${FILTER_SAMPLE_LIMIT} 条）`);
+    outOfReachSamples.forEach((c) => lines.push(`- ${c.school.name} ${c.major_group.group_no}组：${c.rank_diff_vs_candidate.toLocaleString()} 位次/分差，${c.reason}，${c.source.url}`));
+    if (outOfReach.length > outOfReachSamples.length) lines.push(`- 其余 ${outOfReach.length - outOfReachSamples.length} 个不推荐候选默认折叠，不进入主方案。`);
   }
   lines.push("");
   lines.push("## 计划与版本");
