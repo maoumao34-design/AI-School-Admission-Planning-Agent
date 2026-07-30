@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CandidateConditions } from "@/decision/types";
 
 /**
@@ -15,9 +15,11 @@ import type { CandidateConditions } from "@/decision/types";
 type Msg = { role: "user" | "agent"; text: string };
 
 export default function ChatPanel({
+  currentConditions,
   onReady,
   onConditionUpdate,
 }: {
+  currentConditions: CandidateConditions;
   onReady?: (c: CandidateConditions) => void;
   onConditionUpdate?: (c: Partial<CandidateConditions>) => void;
 }) {
@@ -28,9 +30,13 @@ export default function ChatPanel({
     },
   ]);
   const [input, setInput] = useState("");
-  // 默认江苏/2026（场景范围已定），其余由对话补全
-  const [conditions, setConditions] = useState<Partial<CandidateConditions>>({ province: "江苏", year: 2026 });
+  // 以当前档案作为对话 seed，避免只说分数/位次时丢掉已选再选科并导致无法建档。
+  const [conditions, setConditions] = useState<Partial<CandidateConditions>>(currentConditions);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setConditions(currentConditions);
+  }, [currentConditions]);
 
   async function send() {
     const text = input.trim();
@@ -51,7 +57,7 @@ export default function ChatPanel({
       });
       const data = await res.json();
       reply = data.reply ?? reply;
-      updated = data.conditions ?? updated;
+      updated = mergeDialogConditions(currentConditions, data.conditions ?? updated);
       ready = !!data.ready;
       if (Array.isArray(data.conflicts) && data.conflicts.length > 0) {
         conflictNote = "⚠ " + data.conflicts.map((c: { message: string }) => c.message).join("；");
@@ -124,4 +130,21 @@ function isComplete(c: Partial<CandidateConditions>): boolean {
     c.score != null &&
     c.rank != null
   );
+}
+
+function mergeDialogConditions(base: CandidateConditions, partial: Partial<CandidateConditions>): Partial<CandidateConditions> {
+  const sameTrack = !partial.subject?.primary || partial.subject.primary === base.subject.primary;
+  return {
+    ...base,
+    ...partial,
+    subject: partial.subject
+      ? {
+          category: partial.subject.category ?? base.subject.category,
+          primary: partial.subject.primary ?? base.subject.primary,
+          secondary: partial.subject.secondary?.length || sameTrack ? (partial.subject.secondary?.length ? partial.subject.secondary : base.subject.secondary) : [],
+        }
+      : base.subject,
+    preferences: partial.preferences ?? base.preferences,
+    budget: partial.budget ?? base.budget,
+  };
 }
