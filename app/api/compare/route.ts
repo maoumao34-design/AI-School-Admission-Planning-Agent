@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { handleCompare, type CompareHandlerRequest } from '@/decision/handlers';
+import { getDefaultCandidates, getDefaultRules } from '@/decision/serverDataset';
 
 // 决策核心方案比较端点（6 步之 04 方案比较）。按策略排序 + 概率档/位次差/理由。
 export async function POST(request: Request) {
@@ -12,6 +13,10 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const response = handleCompare(body);
+  const response = handleCompare({
+    ...body,
+    candidates: getDefaultCandidates(),
+    rules: body.rules?.length ? body.rules : getDefaultRules(),
+  });
   return NextResponse.json(response);
 }

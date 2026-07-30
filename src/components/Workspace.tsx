@@ -2,19 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-  CandidateCard as CandidateCardDTO,
   CandidateConditions,
   ComparisonResult,
   DecisionResponse,
   EligibilityResult,
+  ProbabilityTier,
   RankedCandidate,
-  Rule,
   Strategy,
   StrategyGroup,
 } from "@/decision/types";
-// 数据角色交付的样本 + 规则（引擎消费）；服务端决策核心(src/decision)重算概率/位次差/排序。
-import sample from "../../data/sample-jiangsu-2026-phys.json";
-import rulesData from "../../data/rules.example.json";
 import CandidateCard from "./CandidateCard";
 import ChatPanel from "./ChatPanel";
 import ConditionForm from "./ConditionForm";
@@ -24,9 +20,42 @@ type Status = "loading" | "error" | "ready";
 type StrategyKey = Extract<Strategy, "院校优先" | "专业优先">;
 const STRATEGIES: StrategyKey[] = ["院校优先", "专业优先"];
 
-const INITIAL_CANDIDATE = sample.candidate_context as unknown as CandidateConditions;
-const CANDIDATES = (sample.cards ?? []) as unknown as CandidateCardDTO[];
-const RULES = (rulesData.rules ?? []) as unknown as Rule[];
+const INITIAL_CANDIDATE: CandidateConditions = {
+  province: "江苏",
+  year: 2026,
+  subject: { category: "物理类", primary: "物理", secondary: ["化学"] },
+  score: 637,
+  rank: 5200,
+};
+
+const DISPLAY_LIMITS: Record<Extract<ProbabilityTier, "稳妥" | "保底" | "冲刺">, number> = {
+  稳妥: 12,
+  保底: 12,
+  冲刺: 6,
+};
+const TIER_ORDER: Array<Extract<ProbabilityTier, "稳妥" | "保底" | "冲刺">> = ["稳妥", "保底", "冲刺"];
+const FILTER_SAMPLE_LIMIT = 10;
+
+async function postDecision<T>(url: string, body: unknown): Promise<DecisionResponse<T>> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText || "非 JSON 响应"}：${text.slice(0, 120) || "接口未返回 JSON"}`);
+  }
+  return (await res.json()) as DecisionResponse<T>;
+}
+
+function tierBuckets(candidates: RankedCandidate[]) {
+  return TIER_ORDER.map((tier) => {
+    const all = candidates.filter((c) => c.probability_ref.tier === tier);
+    return { tier, total: all.length, candidates: all.slice(0, DISPLAY_LIMITS[tier]) };
+  });
+}
 
 /** 工作区：建条件(form) → 资格过滤 → 方案比较 → 改条件随动重算 → 确认导出（6 步端到端可演示）。
  *  全部吃服务端真引擎；条件一改即重算（debounce 300ms）。 */
@@ -58,11 +87,11 @@ export default function Workspace() {
     const id = setTimeout(() => {
       setStatus("loading");
       setErrMsg("");
-      const body = { candidate, candidates: CANDIDATES, rules: RULES, strategies: STRATEGIES };
-      const eligBody = { candidate, candidates: CANDIDATES, rules: RULES };
+      const body = { candidate, strategies: STRATEGIES };
+      const eligBody = { candidate };
       Promise.all([
-        fetch("/api/compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<DecisionResponse<ComparisonResult>>),
-        fetch("/api/eligibility", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(eligBody) }).then((r) => r.json() as Promise<DecisionResponse<EligibilityResult[]>>),
+        postDecision<ComparisonResult>("/api/compare", body),
+        postDecision<EligibilityResult[]>("/api/eligibility", eligBody),
       ])
         .then(([c, e]) => {
           setCompare(c);
@@ -218,13 +247,14 @@ function ReadyView({
         <details className="ml-1">
           <summary className="cursor-pointer text-slate-500">逐条规则</summary>
           <ul className="mt-1 space-y-0.5 text-slate-600">
-            {elig.map((r) => (
+            {elig.slice(0, FILTER_SAMPLE_LIMIT).map((r) => (
               <li key={r.candidate_id}>
                 <b>{r.candidate_id}</b>：{r.passed ? "通过" : "未通过"}
                 {r.blocking_rules.length > 0 && `（阻断：${r.blocking_rules.map((b) => b.rule_id).join("、")}）`}
                 {r.advisories.length > 0 && <span className="text-amber-600"> · {r.advisories.join("；")}</span>}
               </li>
             ))}
+            {elig.length > FILTER_SAMPLE_LIMIT && <li className="text-slate-400">仅展示前 {FILTER_SAMPLE_LIMIT} 条规则样例，其余已折叠。</li>}
           </ul>
         </details>
       </div>
@@ -232,29 +262,45 @@ function ReadyView({
       {/* 步骤 04 方案比较：两套策略并排（§3「并排比较至少两套方案」） */}
       {groups.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-          {groups.map((g) => (
-            <div
-              key={g.strategy}
-              className={`rounded-xl border p-3 ${g.strategy === strategy ? "border-indigo-300 bg-indigo-50/30" : "border-slate-200 bg-white"}`}
-            >
-              <div className="mb-2 flex items-center gap-2 text-xs">
-                <span className="font-medium text-slate-700">{g.strategy}</span>
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">{g.candidates.length} 个候选</span>
-                {g.strategy === strategy && <span className="text-indigo-500">· 当前选中</span>}
+          {groups.map((g) => {
+            const buckets = tierBuckets(g.candidates);
+            const shown = buckets.reduce((sum, b) => sum + b.candidates.length, 0);
+            return (
+              <div
+                key={g.strategy}
+                className={`rounded-xl border p-3 ${g.strategy === strategy ? "border-indigo-300 bg-indigo-50/30" : "border-slate-200 bg-white"}`}
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-medium text-slate-700">{g.strategy}</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">默认展示 {shown}/30</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">总可推荐 {g.candidates.length}</span>
+                  {g.strategy === strategy && <span className="text-indigo-500">· 当前选中</span>}
+                </div>
+                {g.candidates.length > 0 ? (
+                  <div className="space-y-4">
+                    {buckets.map((b) => (
+                      <section key={b.tier} className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-600">
+                          <span className="font-medium">{b.tier}</span>
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5">展示 {b.candidates.length}/{b.total}</span>
+                          {b.total === 0 && <span className="text-amber-600">本档可推荐不足，不硬凑</span>}
+                        </div>
+                        <div className="grid grid-cols-1 gap-3">
+                          {b.candidates.map((c) => (
+                            <CandidateCard key={c.id} card={c} />
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    该策略下无可进主推荐的候选。
+                  </div>
+                )}
               </div>
-              {g.candidates.length > 0 ? (
-                <div className="grid grid-cols-1 gap-3">
-                  {g.candidates.map((c) => (
-                    <CandidateCard key={c.id} card={c} />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                  该策略下无可进主推荐的候选。
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -268,10 +314,13 @@ function ReadyView({
             差距过大 · 不推荐（{outOfReach.length} 个，未混入主推荐列表）
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {outOfReach.map((c) => (
+            {outOfReach.slice(0, FILTER_SAMPLE_LIMIT).map((c) => (
               <CandidateCard key={c.id} card={c} />
             ))}
           </div>
+          {outOfReach.length > FILTER_SAMPLE_LIMIT && (
+            <p className="mt-2 text-slate-500">仅展示前 {FILTER_SAMPLE_LIMIT} 个不推荐原因样例，其余默认不显示。</p>
+          )}
         </details>
       )}
 
