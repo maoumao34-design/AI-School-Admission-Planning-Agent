@@ -151,11 +151,16 @@ export default function Workspace() {
               <ConditionForm value={candidate} onChange={setCandidate} />
             ) : (
               <ChatPanel
+                currentConditions={candidate}
                 onReady={(c) => {
                   setCandidate(c);
                   profileRef.current?.addProfileFromConditions(c);
                 }}
-                onConditionUpdate={(partial) => profileRef.current?.updateActiveFromConditions(partial)}
+                onConditionUpdate={(partial) => {
+                  const merged = mergeCandidateConditions(candidate, partial);
+                  setCandidate(merged);
+                  profileRef.current?.updateActiveFromConditions(merged);
+                }}
               />
             )}
           </div>
@@ -399,6 +404,22 @@ function ReadyView({
       </p>
     </div>
   );
+}
+
+function mergeCandidateConditions(base: CandidateConditions, partial: Partial<CandidateConditions>): CandidateConditions {
+  return {
+    ...base,
+    ...partial,
+    subject: partial.subject
+      ? {
+          category: partial.subject.category ?? base.subject.category,
+          primary: partial.subject.primary ?? base.subject.primary,
+          secondary: partial.subject.secondary ?? base.subject.secondary,
+        }
+      : base.subject,
+    preferences: partial.preferences ?? base.preferences,
+    budget: partial.budget ?? base.budget,
+  };
 }
 
 // —— 确认导出（步骤 06）：生成 Markdown 行动方案并下载 ——
